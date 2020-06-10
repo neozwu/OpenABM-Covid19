@@ -13,6 +13,7 @@
 #include "individual.h"
 #include "interventions.h"
 #include "demographics.h"
+#include <string.h>
 
 /*****************************************************************************************
 *  Name: 		initialize_params
@@ -21,6 +22,7 @@
 void initialize_params( parameters *params )
 {
 	params->demo_house = NULL;
+	params->occupation_network_table = NULL;
 }
 
 /*****************************************************************************************
@@ -59,41 +61,110 @@ int set_up_demographic_house_table( parameters* params, long n_total, long n_hou
 ******************************************************************************************/
 int set_indiv_demographic_house_table( parameters* params, long pdx, int age, long house_no )
 {
-	if( params->demo_house == NULL )
-	{
-		print_now( "Cannot update demo_house until it has been initialized (call set_up_demographic_house_table)" );
-		return FALSE;
-	}
-	if( pdx < 0 | pdx >= params->n_total )
-	{
-		print_now( "The person index must be between 0 and n_total -1" );
-		return FALSE;
-	}
-	if( age < 0 | age >= N_AGE_GROUPS )
-	{
-		print_now( "The person's age must be between 0 and N_AGE_GROUPS-1" );
-		return FALSE;
-	}
-	if( house_no < 0 | house_no >= params->demo_house->n_households )
-	{
-		print_now( "The person's nouse_no must be between 0 and n_households" );
-		return FALSE;
-	}
+    if( params->demo_house == NULL )
+    {
+        print_now( "Cannot update demo_house until it has been initialized (call set_up_demographic_house_table)" );
+        return FALSE;
+    }
+    if( pdx < 0 | pdx >= params->n_total )
+    {
+        print_now( "The person index must be between 0 and n_total -1" );
+        return FALSE;
+    }
+    if( age < 0 | age >= N_AGE_GROUPS )
+    {
+        print_now( "The person's age must be between 0 and N_AGE_GROUPS-1" );
+        return FALSE;
+    }
+    if( house_no < 0 | house_no >= params->demo_house->n_households )
+    {
+        print_now( "The person's nouse_no must be between 0 and n_households" );
+        return FALSE;
+    }
 
-	params->demo_house->idx[ pdx ]       = pdx;
-	params->demo_house->age_group[ pdx ] = age;
-	params->demo_house->house_no[ pdx ]  = house_no;
+    params->demo_house->idx[ pdx ]       = pdx;
+    params->demo_house->age_group[ pdx ] = age;
+    params->demo_house->house_no[ pdx ]  = house_no;
 
-	return TRUE;
+    return TRUE;
 }
 
+int set_indiv_occupation_network_property(
+        parameters* params,
+        long network,
+        long size,
+        long mean_interaction,
+        double lockdown_multiplier,
+        long network_id,
+        char *network_name )
+{
+    params->occupation_network_table->network_size[network] = size;
+    params->occupation_network_table->mean_interactions[network] = mean_interaction;
+    params->occupation_network_table->lockdown_occupation_multipliers[network] = lockdown_multiplier;
+
+    params->occupation_network_table->network_ids[network] = network_id;
+    strcpy(params->occupation_network_table->network_names[network], network_name);
+
+    return TRUE;
+}
+
+int set_occupation_network_table( parameters* params, long n_total, long n_networks )
+{
+    if( params->occupation_network_table != NULL )
+    {
+        // TODO destroy resources
+    }
+    params->occupation_network_table = calloc( 1, sizeof( demographic_occupation_network_table) );
+
+    if( n_total != params->n_total )
+    {
+        print_now( "Total number of people must be the same as n_total in params" );
+        return FALSE;
+    }
+
+    params->occupation_network_table->n_networks = n_networks;
+    params->occupation_network_table->n_total      = n_total;
+    params->occupation_network_table->network_no     = calloc( n_total, sizeof( long ) );
+    params->occupation_network_table->network_size = calloc( n_networks, sizeof( long) );
+    params->occupation_network_table->mean_interactions = calloc( n_networks, sizeof( long) );
+    params->occupation_network_table->lockdown_occupation_multipliers = calloc( n_networks, sizeof( double ));
+    params->occupation_network_table->network_ids= calloc( n_networks, sizeof( long) );
+
+    params->occupation_network_table->network_names = calloc( n_networks, sizeof( char* ) );
+    for (int i=0; i != n_networks; ++i)
+        params->occupation_network_table->network_names[i] = calloc(128, sizeof(char));
+
+    return TRUE;
+}
+
+int set_indiv_occupation_network_table( parameters* params, long pdx, long network_no )
+{
+    if( params->occupation_network_table == NULL )
+    {
+        // TODO
+    }
+    if( pdx < 0 | pdx >= params->n_total )
+    {
+        print_now( "The person index must be between 0 and n_total -1" );
+        return FALSE;
+    }
+    if( network_no < 0 | network_no >= params->occupation_network_table->n_networks )
+    {
+        print_now( "The person's network_no must be between 0 and n_households" );
+        return FALSE;
+    }
+
+    params->occupation_network_table->network_no[pdx] = network_no;
+
+    return TRUE;
+}
 /*****************************************************************************************
 *  Name: 		get_model_param_daily_fraction_work_used
 *  Description: Gets the value of a parameter
 ******************************************************************************************/
 double get_model_param_daily_fraction_work_used(model *model, int idx)
 {
-    if (idx >= N_OCCUPATION_NETWORKS) return -1;
+    if (idx >= N_DEFAULT_OCCUPATION_NETWORKS) return -1;
 
     return model->occupation_network[idx]->daily_fraction;
 }
@@ -304,7 +375,7 @@ double get_model_param_lockdown_random_network_multiplier(model *model)
 ******************************************************************************************/
 double get_model_param_lockdown_occupation_multiplier(model *model, int index)
 {
-	if ( index >= N_OCCUPATION_NETWORKS)  return FALSE;
+	if ( index >= N_DEFAULT_OCCUPATION_NETWORKS)  return FALSE;
 	return model->params->lockdown_occupation_multiplier[index];
 }
 
@@ -589,14 +660,14 @@ void update_work_intervention_state(model *model, int value)
 
 	if (value == TRUE) {
 		// Turn intervetions on
-		for (network = 0; network < N_OCCUPATION_NETWORKS; network++ )
+		for (network = 0; network < N_DEFAULT_OCCUPATION_NETWORKS; network++ )
 		{
 			model->occupation_network[network]->daily_fraction = params->daily_fraction_work *
 				        					            		 params->lockdown_occupation_multiplier[network];
 		}
 	}
 	else {
-		for (network = 0; network < N_OCCUPATION_NETWORKS; network++ )
+		for (network = 0; network < N_DEFAULT_OCCUPATION_NETWORKS; network++ )
 		{
 			model->occupation_network[network]->daily_fraction = params->daily_fraction_work;
 		}
@@ -656,7 +727,7 @@ int set_model_param_lockdown_elderly_on( model *model, int value )
 
 	if( value == TRUE )
 	{
-		for( network = 0; network < N_OCCUPATION_NETWORKS; network++ )
+		for( network = 0; network < N_DEFAULT_OCCUPATION_NETWORKS; network++ )
 			if( NETWORK_TYPE_MAP[ network ] == NETWORK_TYPE_ELDERLY )
 				model->occupation_network[network]->daily_fraction  = params->daily_fraction_work *
 															          params->lockdown_occupation_multiplier[network];
@@ -670,7 +741,7 @@ int set_model_param_lockdown_elderly_on( model *model, int value )
 
 		if( !params->lockdown_on )
 		{
-			for( network = 0; network < N_OCCUPATION_NETWORKS; network++ )
+			for( network = 0; network < N_DEFAULT_OCCUPATION_NETWORKS; network++ )
 				model->occupation_network[network]->daily_fraction = params->daily_fraction_work;
 		}
 
@@ -730,7 +801,7 @@ int set_model_param_lockdown_random_network_multiplier( model *model, double val
 ******************************************************************************************/
 int set_model_param_lockdown_occupation_multiplier( model *model, double value, int index )
 {
-	if (index >= N_OCCUPATION_NETWORKS) return FALSE;
+	if (index >= N_DEFAULT_OCCUPATION_NETWORKS) return FALSE;
 	model->params->lockdown_occupation_multiplier[index] = value;
 
 	if( model->params->lockdown_on )

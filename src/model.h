@@ -52,6 +52,7 @@ struct model{
 	long *possible_interactions;
 	long n_possible_interactions;
 	long n_total_intereactions;
+	long n_occupation_networks;
 
 	network *random_network;
 	network *household_network;

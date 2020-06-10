@@ -338,6 +338,20 @@ class Parameters(object):
 
         result = [covid19.set_indiv_demographic_house_table(self.c_params,int(row[0]),int(row[1]),int(row[2])) for row in df_demo_house[['ID','age_group','house_no']].values]
 
+    def set_occupation_network_table(self, df_occupation_networks, df_occupation_network_properties):
+        n_total = len( df_occupation_networks.index )
+        if n_total != self.get_param( "n_total" ):
+            raise ParameterException( "df_occupation_networks must have n_total rows" )
+
+        n_networks = df_occupation_networks['network_no'].max()+1
+        covid19.set_occupation_network_table( self.c_params, int(n_total), int(n_networks))
+        [covid19.set_indiv_occupation_network_property(
+            self.c_params, int(row[0]), int(row[1]), int(row[2]), float(row[3]), int(row[4]), string(row[5]))
+            for row in df_occupation_network_properties[['network_no', 'network_size', 'mean_work_interaction', 'lockdown_multiplier', 'network_id', 'network_name']].values]
+
+        result = [covid19.set_indiv_occupation_network_table(self.c_params,int(row[0]),int(row[1])) for row in df_occupation_networks[['ID','network_no']].values]
+
+
 class Model:
     def __init__(self, params_object):
         # Store the params object so it doesn't go out of scope and get freed

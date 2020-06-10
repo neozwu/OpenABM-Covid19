@@ -30,7 +30,7 @@ typedef struct{
 	double mean_random_interactions[N_AGE_TYPES]; // mean number of random interactions each day
 	double sd_random_interactions[N_AGE_TYPES];   // sd number of random interactions each day
 	int random_interaction_distribution;          // distribution from which each person random interactions are drawn
-	double mean_work_interactions[N_OCCUPATION_NETWORKS];// mean number of regular work interactions
+	double mean_work_interactions[N_DEFAULT_OCCUPATION_NETWORKS];// mean number of regular work interactions
 	double daily_fraction_work;      			// fraction of daily work interactions without social-distancing
 	double child_network_adults;				// fraction of adults in the child network
 	double elderly_network_adults;				// fraction of adults in the elderly network
@@ -119,7 +119,7 @@ typedef struct{
 	int app_turn_on_time;   				// time after which the app is usable
 	double daily_non_cov_symptoms_rate; 				// Rate of seasonal flu
 
-	double lockdown_occupation_multiplier[N_OCCUPATION_NETWORKS];   // during lockdown distancing this multiplier is applied to the fraction of work network connections made
+	double lockdown_occupation_multiplier[N_DEFAULT_OCCUPATION_NETWORKS];   // during lockdown distancing this multiplier is applied to the fraction of work network connections made
 	double lockdown_random_network_multiplier; 		// during lockdown distancing this multiplier is applied to the fraction of random network connections made
 	double lockdown_house_interaction_multiplier;  	// during lockdown this multiplier is applied to the strengin of home connections
 	int lockdown_time_on;							// lockdown turned on at this time
@@ -141,6 +141,8 @@ typedef struct{
 	long N_REFERENCE_HOUSEHOLDS;			 // Number of households in the household demographics file
 	int **REFERENCE_HOUSEHOLDS;				 // Array of reference households
 	demographic_household_table *demo_house; // Pointer to a table of demographic and house numbers (if user specified)
+
+	demographic_occupation_network_table *occupation_network_table;
 
 	double ***risk_score;  			// risk score somebody who has been traced
 	double **risk_score_household;  // risk score for household members of symptomatic person

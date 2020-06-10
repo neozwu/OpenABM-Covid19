@@ -357,7 +357,7 @@ void read_param_file( parameters *params)
 	check = fscanf(parameter_file, " %i ,", &(params->app_turn_on_time));
 	if( check < 1){ print_exit("Failed to read parameter app_turn_on_time)\n"); };
 
-	for (i = 0; i<N_OCCUPATION_NETWORKS; i++){
+	for (i = 0; i<N_DEFAULT_OCCUPATION_NETWORKS; i++){
 
 		check = fscanf(parameter_file, " %lf ,", &(params->lockdown_occupation_multiplier[i]));
 		if( check < 1){ print_exit("Failed to read parameter lockdown_occupation_multiplier)\n"); };
