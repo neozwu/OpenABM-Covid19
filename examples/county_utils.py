@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 import argparse
 import collections
 import csv
+import glob
 import example_utils as utils
 import itertools
 import math
@@ -23,7 +24,7 @@ parser.add_argument("--household_demographics", type=str, default="./data/us-wa/
 parser.add_argument("--occupations", type=str, default="./data/us-wa/wa_county_occupation_networks.csv", help="County-specific household demographics file(s). Expects an extra column of county_fips_code to designate which county this refers to.")
 parser.add_argument("--study_params", type=str, default=None, help="Optional. Parameter file with one set of overrides per line. If an extra column of \'study_name\" is used, will be used for writing results, otherwise the line number will be used.")
 parser.add_argument("--output_dir", type=str, default="./results/us-wa/")
-parser.add_argument("--input_base_dir", type=str, default=None, help="Optional. If specified, will be prepended to all input paths")
+parser.add_argument("--input_base_dir", type=str, default="..", help="Optional. If specified, will be prepended to all input paths")
 parser.add_argument("--counties", type=str, default=None, help="Optional. If specified, only specified counties will be processed (comma-separated list).")
 
 LOCAL_DEFAULT_PARAMS = {
@@ -362,6 +363,20 @@ class AggregateModel(object):
     params, result = self.merged_results
     pd.DataFrame(params, index=[0]).to_csv(os.path.join(output_dir, f"merged_params.csv"), index=False)
     result.to_csv(os.path.join(output_dir, f"merged_results.csv"), index=False)
+
+
+def read_results(base_dir, sim_names=None):
+  if sim_names is None:
+    paths = glob.glob(os.path.join(base_dir, "*/merged_results.csv"))
+    sim_names = [os.path.basename(os.path.dirname(path)) for path in paths]
+
+  results = []
+  for sim in sim_names:
+    params = pd.read_csv(os.path.join(base_dir, f"{sim}/merged_params.csv")).loc[0].to_dict()
+    result = pd.read_csv(os.path.join(base_dir, f"{sim}/merged_results.csv"))
+    results.append([params, result])
+
+  return results, sim_names
 
 
 def main(args):
