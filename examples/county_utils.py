@@ -24,6 +24,7 @@ parser.add_argument("--occupations", type=str, default="./data/us-wa/wa_county_o
 parser.add_argument("--study_params", type=str, default=None, help="Optional. Parameter file with one set of overrides per line. If an extra column of \'study_name\" is used, will be used for writing results, otherwise the line number will be used.")
 parser.add_argument("--output_dir", type=str, default="./results/us-wa/")
 parser.add_argument("--input_base_dir", type=str, default=None, help="Optional. If specified, will be prepended to all input paths")
+parser.add_argument("--counties", type=str, default=None, help="Optional. If specified, only specified counties will be processed (comma-separated list).")
 
 LOCAL_DEFAULT_PARAMS = {
     "county_fips": "00000",
@@ -277,7 +278,7 @@ def run_counties(county_params, all_households, all_occupations, params_files=[]
   return outputs
 
 class AggregateModel(object):
-  def __init__(self, param_files, households_file, occupations_file, county_params_file, params_overrides, run_parallel=True):
+  def __init__(self, param_files, households_file, occupations_file, county_params_file, params_overrides={}, run_parallel=True):
     self.params = read_param_files(param_files)
     self.params.update(params_overrides)
     self.households = pd.read_csv(households_file, skipinitialspace=True, comment="#")
@@ -330,6 +331,7 @@ class AggregateModel(object):
     merged_results = pd.concat([result[1] for result in self.results.values()]).groupby(["time"]).sum().reset_index()
     merged_params = next(iter(self.results.values()))[0].copy()
     merged_params["n_total"] = sum((result[0]["n_total"] for result in self.results.values()))
+    merged_params["time_offset"] = 0
     self.merged_results = [merged_params, merged_results]
     return self.merged_results
 
@@ -343,8 +345,12 @@ class AggregateModel(object):
   def write_results(self, output_dir, write_merged=True):
     if not self.results:
       return
+    try:
+      os.makedirs(output_dir)
+    except FileExistsError:
+      pass
 
-    for county, output in self.results:
+    for county, output in self.results.items():
       params, result = output
       pd.DataFrame(params, index=[0]).to_csv(os.path.join(output_dir, f"{county}_params.csv"), index=False)
       result.to_csv(os.path.join(output_dir, f"{county}_results.csv"), index=False)
@@ -359,6 +365,10 @@ class AggregateModel(object):
 
 
 def main(args):
+  output_dir = args.output_dir
+  if args.counties:
+    counties = [int(c.strip()) for c in args.counties.split(',')]
+
   if args.study_params:
     overrides = pd.read_csv(args.study_params)
     if "study_name" not in overrides:
@@ -369,9 +379,13 @@ def main(args):
   households_file = os.path.join(args.input_base_dir, args.household_demographics)
   occupations_file = os.path.join(args.input_base_dir, args.occupations)
   county_params_file = os.path.join(args.input_base_dir, args.county_parameters)
+
+  model = AggregateModel([state_param_file], households_file, occupations_file, county_params_file)
   for override in overrides.itertuples():
-    model = AggregateModel([state_param_file], households_file, occupations_file, county_params_file, override._asdict())
-    model.run_all()
+    if counties:
+      model.run_counties(counties, override._asdict())
+    else:
+      model.run_all(override._asdict())
     if output_dir:
       model.write_results(os.path.join(output_dir, override.study_name))
 
