@@ -4,17 +4,35 @@ Utility functions created for running multi-county simulations.
 Created: 25 June 2020
 Author: mattea
 """
+from matplotlib import pyplot as plt
+import argparse
 import collections
-import sys
+import csv
 import example_utils as utils
+import itertools
+import math
 import pandas as pd
 import numpy as np
-from matplotlib import pyplot as plt
-import csv
-import math
-import itertools
+import os
+import sys
 
-LOCAL_PARAMS = set(["county_fips", "lockdown_days", "app_turned_on", "custom_occupation_network"])
+parser = argparse.ArgumentParser(description="Run County Simluations.")
+parser.add_argument("--statewide_parameters", type=str, default="./data/us-wa/wa_state_parameters_transpose.csv", help="State-specific parameters file. Will overwite baseline values, but can be overwritten by individual county-level parameters. Reads as transpose file if 'transpose' is present in file name.")
+parser.add_argument("--county_parameters", type=str, default="./data/us-wa/wa_county_parameters.csv", help="County-specific parameters file(s). Will overwite baseline and state values. Expects an extra column of county_fips to designate which county this refers to.")
+parser.add_argument("--household_demographics", type=str, default="./data/us-wa/wa_county_household_demographics.csv", help="County-specific household demographics file(s). Expects an extra column of county_fips_code to designate which county this refers to.")
+parser.add_argument("--occupations", type=str, default="./data/us-wa/wa_county_occupation_networks.csv", help="County-specific household demographics file(s). Expects an extra column of county_fips_code to designate which county this refers to.")
+parser.add_argument("--study_params", type=str, default=None, help="Optional. Parameter file with one set of overrides per line. If an extra column of \'study_name\" is used, will be used for writing results, otherwise the line number will be used.")
+parser.add_argument("--output_dir", type=str, default="./results/us-wa/")
+parser.add_argument("--input_base_dir", type=str, default=None, help="Optional. If specified, will be prepended to all input paths")
+
+LOCAL_DEFAULT_PARAMS = {
+    "county_fips": "00000",
+    "lockdown_days": 35,
+    "app_turned_on": 1,
+    "custom_occupation_network": 1,
+    "study_name": "0",
+    "Index": 0,
+}
 HOUSEHOLD_SIZES=[f"household_size_{i}" for i in  range(1,7)]
 AGE_BUCKETS=[f"{l}_{h}" for l, h in zip(range(0, 80, 10), range(9, 80, 10))] + ["80"]
 
@@ -190,11 +208,15 @@ def build_occupation_assignment(household_df, network_df, network_pdf):
   return pd.DataFrame({'ID': IDs, 'network_no': assignment})
 
 def run_model(params_dict, houses, sector_names, sector_pdf):
+  pt = LOCAL_DEFAULT_PARAMS.copy()
+  pt.update(params_dict)
+  params_dict = pt
+
   total_days_left = int(params_dict['end_time'])
 
   params  = utils.get_baseline_parameters()
   for p, v in params_dict.items():
-    if p in LOCAL_PARAMS:
+    if p in LOCAL_DEFAULT_PARAMS:
       continue
     if isinstance(v, np.int64) or (hasattr(v, "is_integer") and v.is_integer()):
       params.set_param( p, int(v) )
@@ -280,14 +302,13 @@ class AggregateModel(object):
       from concurrent.futures import ProcessPoolExecutor
 
       progress_bar = True
-      n_threads = 8
 
       if progress_bar:
         progress_monitor = tqdm
       else:
         progress_monitor = lambda x: x
 
-      with ProcessPoolExecutor(n_threads) as ex:
+      with ProcessPoolExecutor() as ex:
         outputs = list(
           progress_monitor(
             ex.map(self.run_county, counties_fips, itertools.repeat(params_overrides, len(counties_fips))),
@@ -309,7 +330,7 @@ class AggregateModel(object):
     merged_results = pd.concat([result[1] for result in self.results.values()]).groupby(["time"]).sum().reset_index()
     merged_params = next(iter(self.results.values()))[0].copy()
     merged_params["n_total"] = sum((result[0]["n_total"] for result in self.results.values()))
-    self.merged_results = [[merged_params, merged_results]]
+    self.merged_results = [merged_params, merged_results]
     return self.merged_results
 
   def plot_results(self):
@@ -317,4 +338,42 @@ class AggregateModel(object):
       return
     if not self.merged_results:
       self.merge_results()
-    sim_display(self.merged_results, ["AggregateModel"])
+    sim_display([self.merged_results], ["AggregateModel"])
+
+  def write_results(self, output_dir, write_merged=True):
+    if not self.results:
+      return
+
+    for county, output in self.results:
+      params, result = output
+      pd.DataFrame(params, index=[0]).to_csv(os.path.join(output_dir, f"{county}_params.csv"), index=False)
+      result.to_csv(os.path.join(output_dir, f"{county}_results.csv"), index=False)
+
+    if not write_merged:
+      return
+    if not self.merged_results:
+      self.merge_results()
+    params, result = self.merged_results
+    pd.DataFrame(params, index=[0]).to_csv(os.path.join(output_dir, f"merged_params.csv"), index=False)
+    result.to_csv(os.path.join(output_dir, f"merged_results.csv"), index=False)
+
+
+def main(args):
+  if args.study_params:
+    overrides = pd.read_csv(args.study_params)
+    if "study_name" not in overrides:
+      overrides["study_name"] = [f"{i}" for i in range(len(overrides))]
+  else:
+    overrides = pd.DataFrame({"study_name": ["0"]})
+  state_param_file = os.path.join(args.input_base_dir, args.statewide_parameters)
+  households_file = os.path.join(args.input_base_dir, args.household_demographics)
+  occupations_file = os.path.join(args.input_base_dir, args.occupations)
+  county_params_file = os.path.join(args.input_base_dir, args.county_parameters)
+  for override in overrides.itertuples():
+    model = AggregateModel([state_param_file], households_file, occupations_file, county_params_file, override._asdict())
+    model.run_all()
+    if output_dir:
+      model.write_results(os.path.join(output_dir, override.study_name))
+
+if __name__ == "__main__":
+  main(parser.parse_args())
