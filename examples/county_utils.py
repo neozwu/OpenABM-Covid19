@@ -278,6 +278,16 @@ def run_counties(county_params, all_households, all_occupations, params_files=[]
     outputs.append(run_model(params, households, sector_names, sector_pdf))
   return outputs
 
+def remove_nans(d):
+  d = d.copy()
+  for k in list(d.keys()):
+    try:
+      if np.isnan(d[k]):
+        del d[k]
+    except TypeError:
+      pass
+  return d
+
 class AggregateModel(object):
   def __init__(self, param_files, households_file, occupations_file, county_params_file, params_overrides={}, run_parallel=True):
     self.params = read_param_files(param_files)
@@ -299,6 +309,7 @@ class AggregateModel(object):
     return run_model(params, households, sector_names, sector_pdf)
 
   def run_counties(self, counties_fips, params_overrides={}):
+    params_overrides = remove_nans(params_overrides)
     if self.run_parallel:
       from tqdm import tqdm, trange
       from concurrent.futures import ProcessPoolExecutor
