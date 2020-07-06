@@ -329,6 +329,9 @@ void read_param_file( parameters *params)
 	check = fscanf(parameter_file, " %i ,", &(params->test_on_traced));
 	if( check < 1){ print_exit("Failed to read parameter test_on_traced\n"); };
 
+	check = fscanf(parameter_file, " %i ,", &(params->test_release_on_negative));
+	if( check < 1){ print_exit("Failed to read parameter test_release_on_negative\n"); };
+
 	check = fscanf(parameter_file, " %i ,", &(params->trace_on_symptoms));
 	if( check < 1){ print_exit("Failed to read parameter trace_on_symptoms\n"); };
 
@@ -383,6 +386,15 @@ void read_param_file( parameters *params)
 	check = fscanf(parameter_file, " %i , ",   &(params->test_insensitive_period));
 	if( check < 1){ print_exit("Failed to read parameter test_insensitive_period\n"); };
 
+	check = fscanf(parameter_file, " %i , ",   &(params->test_sensitive_period));
+	if( check < 1){ print_exit("Failed to read parameter test_sensitive_period\n"); };
+
+	check = fscanf(parameter_file, " %lf, ",   &(params->test_sensitivity));
+	if( check < 1){ print_exit("Failed to read parameter test_sensitivity\n"); };
+
+	check = fscanf(parameter_file, " %lf , ",   &(params->test_specificity));
+	if( check < 1){ print_exit("Failed to read parameter test_specificity\n"); };
+
 	check = fscanf(parameter_file, " %i , ",   &(params->test_order_wait));
 	if( check < 1){ print_exit("Failed to read parameter test_order_wait\n"); };
     
@@ -398,7 +410,7 @@ void read_param_file( parameters *params)
 	for( i = 0; i < N_AGE_GROUPS; i++ )
     {
         check = fscanf(parameter_file, " %i ,", &(params->priority_test_contacts[i]));
-        if( check < 1){ print_exit("Failed to read parameter app_users_fraction\n"); };
+        if( check < 1){ print_exit("Failed to read parameter priority_test_contacts\n"); };
     }
 
 	check = fscanf(parameter_file, " %lf ,", &(params->self_quarantine_fraction));
@@ -448,6 +460,31 @@ void read_param_file( parameters *params)
 
 	check = fscanf(parameter_file, " %i ,", &(params->hospital_on));
 	if( check < 1){ print_exit("Failed to read parameter hospital_on)\n"); };
+
+	check = fscanf(parameter_file, " %i ,", &(params->manual_trace_on));
+	if( check < 1){ print_exit("Failed to read parameter manual_trace_on\n"); };
+	check = fscanf(parameter_file, " %i ,", &(params->manual_trace_time_on));
+	if( check < 1){ print_exit("Failed to read parameter manual_trace_time_on\n"); };
+	check = fscanf(parameter_file, " %i ,", &(params->manual_trace_on_hospitalization));
+	if( check < 1){ print_exit("Failed to read parameter manual_trace_on_hospitalization\n"); };
+	check = fscanf(parameter_file, " %i ,", &(params->manual_trace_on_positive));
+	if( check < 1){ print_exit("Failed to read parameter manual_trace_on_positive\n"); };
+	check = fscanf(parameter_file, " %i ,", &(params->manual_trace_delay));
+	if( check < 1){ print_exit("Failed to read parameter manual_trace_delay\n"); };
+	check = fscanf(parameter_file, " %i ,", &(params->manual_trace_exclude_app_users));
+	if( check < 1){ print_exit("Failed to read parameter manual_trace_exclude_app_users\n"); };
+	check = fscanf(parameter_file, " %i ,", &(params->manual_trace_n_workers));
+	if( check < 1){ print_exit("Failed to read parameter manual_trace_n_workers\n"); };
+	check = fscanf(parameter_file, " %i ,", &(params->manual_trace_interviews_per_worker_day));
+	if( check < 1){ print_exit("Failed to read parameter manual_trace_interviews_per_worker_day\n"); };
+	check = fscanf(parameter_file, " %i ,", &(params->manual_trace_notifications_per_worker_day));
+	if( check < 1){ print_exit("Failed to read parameter manual_trace_notifications_per_worker_day\n"); };
+	check = fscanf(parameter_file, " %lf ,", &(params->manual_traceable_fraction[HOUSEHOLD]));
+	if( check < 1){ print_exit("Failed to read parameter manual_traceable_fraction_household\n"); };
+	check = fscanf(parameter_file, " %lf ,", &(params->manual_traceable_fraction[OCCUPATION]));
+	if( check < 1){ print_exit("Failed to read parameter manual_traceable_fraction_occupation\n"); };
+	check = fscanf(parameter_file, " %lf ,", &(params->manual_traceable_fraction[RANDOM]));
+	if( check < 1){ print_exit("Failed to read parameter manual_traceable_fraction_random\n"); };
 
 	fclose(parameter_file);
 }
@@ -883,7 +920,7 @@ void write_interactions( model *model )
 {
 	char output_file_name[INPUT_CHAR_LEN];
 	FILE *output_file;
-	long pdx;
+	long pdx, time;
 	int day, idx;
 	individual *indiv;
 	interaction *inter;
@@ -901,8 +938,9 @@ void write_interactions( model *model )
 
 	day = model->interaction_day_idx;
 	ring_dec( day, model->params->days_of_interactions );
+	time = model->time - 1;
 
-	fprintf(output_file ,"ID_1,age_group_1,worker_type_1,house_no_1,occupation_network_1,type,ID_2,age_group_2,worker_type_2,house_no_2,occupation_network_2\n");
+	fprintf(output_file ,"ID_1,age_group_1,worker_type_1,house_no_1,occupation_network_1,type,ID_2,age_group_2,worker_type_2,house_no_2,occupation_network_2,traceable,manual_traceable,time\n");
 	for( pdx = 0; pdx < model->params->n_total; pdx++ )
 	{
 
@@ -913,7 +951,7 @@ void write_interactions( model *model )
 			inter = indiv->interactions[day];
 			for( idx = 0; idx < indiv->n_interactions[day]; idx++ )
 			{
-				fprintf(output_file ,"%li,%i,%i,%li,%i,%i,%li,%i,%i,%li,%i\n",
+				fprintf(output_file ,"%li,%i,%i,%li,%i,%i,%li,%i,%i,%li,%i,%i,%i,%li\n",
 					indiv->idx,
 					indiv->age_group,
 					indiv->worker_type,
@@ -924,7 +962,10 @@ void write_interactions( model *model )
 					inter->individual->age_group,
 					inter->individual->worker_type,
 					inter->individual->house_no,
-					inter->individual->occupation_network
+					inter->individual->occupation_network,
+					inter->traceable,
+					inter->manual_traceable,
+					time
 				);
 				inter = inter->next;
 			}
@@ -1115,7 +1156,7 @@ void write_trace_tokens( model *model )
 	strcat(output_file_name, ".csv");
 
 	output_file = fopen(output_file_name, "w");
-	fprintf( output_file ,"time,index_time,index_ID,index_reason,index_status,contact_time,traced_ID,traced_status,traced_infector_ID,traced_time_infected\n" );
+	fprintf( output_file ,"time,index_time,index_ID,index_reason,index_status,contact_time,traced_from_ID,traced_ID,traced_status,traced_infector_ID,traced_time_infected\n" );
 
 	int max_quarantine_length = max( model->params->quarantine_length_traced_symptoms, model->params->quarantine_length_traced_positive );
 	for( day = 1; day <= max_quarantine_length; day++ )
@@ -1137,13 +1178,14 @@ void write_trace_tokens( model *model )
 
 			while( token != NULL )
 			{
-				fprintf( output_file, "%i,%i,%li,%i,%i,%i,%li,%i,%li,%i\n",
+				fprintf( output_file, "%i,%i,%li,%i,%i,%i,%li,%li,%i,%li,%i\n",
 					model->time,
 					index_time,
 					indiv->idx,
 					token->index_status,
 					indiv->status,
 					token->contact_time,
+					ifelse( token->traced_from != NULL, token->traced_from->idx, -1 ),
 					token->individual->idx,
 					token->individual->status,
 					ifelse( token->individual->status > 0, token->individual->infection_events->infector->idx, -1 ),

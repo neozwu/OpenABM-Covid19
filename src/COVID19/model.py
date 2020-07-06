@@ -49,6 +49,17 @@ PYTHON_SAFE_UPDATE_PARAMS = [
     "lockdown_occupation_multiplier_working_network",
     "lockdown_occupation_multiplier_retired_network",
     "lockdown_occupation_multiplier_elderly_network",
+    "manual_trace_on",
+    "manual_trace_on_hospitalization",
+    "manual_trace_on_positive",
+    "manual_trace_delay",
+    "manual_trace_exclude_app_users",
+    "manual_trace_n_workers",
+    "manual_trace_interviews_per_worker_day",
+    "manual_trace_notifications_per_worker_day",
+    "manual_traceable_fraction_household",
+    "manual_traceable_fraction_occupation",
+    "manual_traceable_fraction_random",
     "relative_transmission_household",
     "relative_transmission_occupation",
     "relative_transmission_random",
@@ -61,6 +72,7 @@ PYTHON_SAFE_UPDATE_PARAMS = [
     "priority_test_contacts_60_69",
     "priority_test_contacts_70_79",
     "priority_test_contacts_80",
+    "test_release_on_negative",
 ]
 
 
@@ -88,7 +100,8 @@ class EVENT_TYPES(enum.Enum):
     ICU = 20
     MORTUARY = 21
     DISCHARGED = 22
-    N_EVENT_TYPES = 23
+    MANUAL_CONTACT_TRACING = 23
+    N_EVENT_TYPES = 24
 
 
 
@@ -658,6 +671,18 @@ class Model:
         results["hospital_to_critical_total"] = covid19.utils_n_total(
             self.c_model, covid19.CRITICAL
         )
+        
+        results["n_quarantine_infected"] = self.c_model.n_quarantine_infected
+        results["n_quarantine_recovered"] = self.c_model.n_quarantine_recovered
+        results["n_quarantine_app_user"] = self.c_model.n_quarantine_app_user
+        results["n_quarantine_app_user_infected"] = self.c_model.n_quarantine_app_user_infected
+        results["n_quarantine_app_user_recovered"] = self.c_model.n_quarantine_app_user_recovered
+        results["n_quarantine_events"] = self.c_model.n_quarantine_events
+        results["n_quarantine_release_events"] = self.c_model.n_quarantine_release_events
+        results["n_quarantine_events_app_user"] = self.c_model.n_quarantine_events_app_user
+        results["n_quarantine_release_events_app_user"] = \
+            self.c_model.n_quarantine_release_events_app_user
+        
         return results
 
     def write_output_files(self):

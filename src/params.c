@@ -70,17 +70,17 @@ int set_demographic_house_table(
 
 	for( pdx = 0; pdx < n_total; pdx++ )
 	{
-		if( people[pdx] < 0 | people[pdx] >= params->n_total )
+		if( (people[pdx] < 0) | (people[pdx] >= params->n_total) )
 		{
 			print_now( "The person index must be between 0 and n_total -1" );
 			return FALSE;
 		}
-		if( ages[pdx] < 0 | ages[pdx] >= N_AGE_GROUPS )
+		if( (ages[pdx] < 0) | (ages[pdx] >= N_AGE_GROUPS) )
 		{
 			print_now( "The person's age must be between 0 and N_AGE_GROUPS-1" );
 			return FALSE;
 		}
-		if( house_nos[pdx] < 0 | house_nos[pdx] >= params->demo_house->n_households )
+		if( (house_nos[pdx] < 0) | (house_nos[pdx] >= params->demo_house->n_households) )
 		{
 			print_now( "The person's nouse_no must be between 0 and n_households" );
 			return FALSE;
@@ -176,7 +176,7 @@ int set_indiv_occupation_network(
 
     for ( int pdx = 0; pdx != n_total; ++pdx)
     {
-        if( network[pdx] < 0 | network[pdx] >= params->occupation_network_table->n_networks )
+        if( (network[pdx] < 0) | (network[pdx] >= params->occupation_network_table->n_networks) )
         {
             print_now( "The person's network_no must be between 0 and n_occupation_networks." );
             return FALSE;
@@ -243,6 +243,7 @@ int get_model_param_trace_on_symptoms(model *model)
 {
     return model->params->trace_on_symptoms;
 }
+
 /*****************************************************************************************
 *  Name:		get_model_param_trace_on_positive
 *  Description: Gets the value of an int parameter
@@ -349,6 +350,15 @@ int get_model_param_quarantine_household_contacts_on_symptoms(model *model)
 int get_model_param_test_on_symptoms(model *model)
 {
     return model->params->test_on_symptoms;
+}
+
+/*****************************************************************************************
+*  Name:		get_model_param_test_release_on_negative
+*  Description: Gets the value of an int parameter
+******************************************************************************************/
+int get_model_param_test_release_on_negative(model *model)
+{
+    return model->params->test_release_on_negative;
 }
 
 /*****************************************************************************************
@@ -470,6 +480,87 @@ double get_model_param_lockdown_occupation_multiplier(model *model, int idx)
 {
 	if ( idx >= N_DEFAULT_OCCUPATION_NETWORKS)  return FALSE;
 	return model->params->lockdown_occupation_multiplier[idx];
+}
+
+/*****************************************************************************************
+*  Name:        get_model_param_manual_trace_on_hospitalization
+*  Description: Gets the value of parameter
+******************************************************************************************/
+int get_model_param_manual_trace_on_hospitalization( model* model )
+{
+	return model->params->manual_trace_on_hospitalization;
+}
+
+/*****************************************************************************************
+*  Name:        get_model_param_manual_trace_on_positive
+*  Description: Gets the value of parameter
+******************************************************************************************/
+int get_model_param_manual_trace_on_positive( model* model )
+{
+	return model->params->manual_trace_on_positive;
+}
+
+/*****************************************************************************************
+*  Name:        get_model_param_manual_trace_on
+*  Description: Gets the value of parameter
+******************************************************************************************/
+int get_model_param_manual_trace_on( model* model )
+{
+	return model->params->manual_trace_on;
+}
+
+/*****************************************************************************************
+*  Name:        get_model_param_manual_trace_delay
+*  Description: Gets the value of parameter
+******************************************************************************************/
+int get_model_param_manual_trace_delay( model* model )
+{
+	return model->params->manual_trace_delay;
+}
+
+/*****************************************************************************************
+*  Name:        get_model_param_manual_trace_exclude_app_users
+*  Description: Gets the value of parameter
+******************************************************************************************/
+int get_model_param_manual_trace_exclude_app_users( model* model )
+{
+	return model->params->manual_trace_exclude_app_users;
+}
+
+/*****************************************************************************************
+*  Name:        get_model_param_manual_trace_n_workers
+*  Description: Gets the value of parameter
+******************************************************************************************/
+int get_model_param_manual_trace_n_workers( model* model )
+{
+	return model->params->manual_trace_n_workers;
+}
+
+/*****************************************************************************************
+*  Name:        get_model_param_manual_trace_interviews_per_worker_day
+*  Description: Gets the value of parameter
+******************************************************************************************/
+int get_model_param_manual_trace_interviews_per_worker_day( model* model )
+{
+	return model->params->manual_trace_interviews_per_worker_day;
+}
+
+/*****************************************************************************************
+*  Name:        get_model_param_manual_trace_notifications_per_worker_day
+*  Description: Gets the value of parameter
+******************************************************************************************/
+int get_model_param_manual_trace_notifications_per_worker_day( model* model )
+{
+	return model->params->manual_trace_notifications_per_worker_day;
+}
+
+/*****************************************************************************************
+*  Name:        get_model_param_manual_traceable_fraction_occupation
+*  Description: Gets the value of parameter
+******************************************************************************************/
+double get_model_param_manual_traceable_fraction( model* model, int type )
+{
+	return model->params->manual_traceable_fraction[type];
 }
 
 /*****************************************************************************************
@@ -630,12 +721,23 @@ int set_model_param_test_on_traced( model *model, int value )
 }
 
 /*****************************************************************************************
+*  Name:		set_model_param_test_release_on_negative
+*  Description: Sets the value of parameter
+******************************************************************************************/
+int set_model_param_test_release_on_negative( model *model, int value )
+{
+    model->params->test_release_on_negative = value;
+    return TRUE;
+}
+
+/*****************************************************************************************
 *  Name:		set_model_param_test_result_wait
 *  Description: Sets the value of parameter
 ******************************************************************************************/
 int set_model_param_test_result_wait( model *model, int value )
 {
     model->params->test_result_wait = value;
+	check_params( model->params );
     return TRUE;
 }
 
@@ -646,6 +748,7 @@ int set_model_param_test_result_wait( model *model, int value )
 int set_model_param_test_order_wait( model *model, int value )
 {
     model->params->test_order_wait = value;
+	check_params( model->params );
     return TRUE;
 }
 
@@ -663,6 +766,8 @@ int set_model_param_test_result_wait_priority( model *model, int value )
     if( value == NO_PRIORITY_TEST )
     	model->params->test_order_wait_priority = NO_PRIORITY_TEST;
 
+    check_params( model->params );
+
     return TRUE;
 }
 
@@ -679,6 +784,8 @@ int set_model_param_test_order_wait_priority( model *model, int value )
 
      if( value == NO_PRIORITY_TEST )
      	model->params->test_result_wait_priority = NO_PRIORITY_TEST;
+
+ 	check_params( model->params );
 
     return TRUE;
 }
@@ -1014,16 +1121,115 @@ int set_model_param_lockdown_occupation_multiplier( model *model, double value, 
 {
 	if ( idx >= model->n_occupation_networks ) return FALSE;
 
-    if ( model->use_custom_occupation_networks == 0 )
-        model->params->lockdown_occupation_multiplier[idx] = value;
-    else
-        model->params->occupation_network_table->lockdown_occupation_multipliers[idx] = value;
+	if ( model->use_custom_occupation_networks == 0 )
+		model->params->lockdown_occupation_multiplier[idx] = value;
+	else
+		model->params->occupation_network_table->lockdown_occupation_multipliers[idx] = value;
 
 	if( model->params->lockdown_on )
 		return set_model_param_lockdown_on( model, TRUE );
 
 	if( model->params->lockdown_elderly_on )
 		return set_model_param_lockdown_elderly_on( model, TRUE );
+
+	return TRUE;
+}
+
+/*****************************************************************************************
+*  Name:        set_model_param_manual_traceable_fraction
+*  Description: Sets the value of parameter for given type
+******************************************************************************************/
+int set_model_param_manual_traceable_fraction( model *model, double value, int type )
+{
+	model->params->manual_traceable_fraction[type] = value;
+
+	return TRUE;
+}
+
+/*****************************************************************************************
+*  Name:        set_model_param_manual_trace_on_hospitalization
+*  Description: Sets the value of parameter
+******************************************************************************************/
+int set_model_param_manual_trace_on_hospitalization( model* model, int value )
+{
+	model->params->manual_trace_on_hospitalization = value;
+
+	return TRUE;
+}
+
+/*****************************************************************************************
+*  Name:        set_model_param_manual_trace_on_positive
+*  Description: Sets the value of parameter
+******************************************************************************************/
+int set_model_param_manual_trace_on_positive( model* model, int value )
+{
+	model->params->manual_trace_on_positive = value;
+
+	return TRUE;
+}
+
+/*****************************************************************************************
+*  Name:        set_model_param_manual_trace_on
+*  Description: Sets the value of parameter
+******************************************************************************************/
+int set_model_param_manual_trace_on( model* model, int value )
+{
+	model->params->manual_trace_on = value;
+
+	return TRUE;
+}
+
+/*****************************************************************************************
+*  Name:        set_model_param_manual_trace_delay
+*  Description: Sets the value of parameter
+******************************************************************************************/
+int set_model_param_manual_trace_delay( model* model, int value )
+{
+	model->params->manual_trace_delay = value;
+
+	return TRUE;
+}
+
+/*****************************************************************************************
+*  Name:        set_model_param_manual_trace_exclude_app_users
+*  Description: Sets the value of parameter
+******************************************************************************************/
+int set_model_param_manual_trace_exclude_app_users( model* model, int value )
+{
+	model->params->manual_trace_exclude_app_users = value;
+
+	return TRUE;
+}
+
+/*****************************************************************************************
+*  Name:        set_model_param_manual_trace_n_workers
+*  Description: Sets the value of parameter
+******************************************************************************************/
+int set_model_param_manual_trace_n_workers( model* model, int value )
+{
+	model->params->manual_trace_n_workers = value;
+
+	return TRUE;
+}
+
+/*****************************************************************************************
+*  Name:        set_model_param_manual_trace_interviews_per_worker_day
+*  Description: Sets the value of parameter
+******************************************************************************************/
+int set_model_param_manual_trace_interviews_per_worker_day( model* model, int value )
+{
+	model->params->manual_trace_interviews_per_worker_day = value;
+
+	return TRUE;
+}
+
+/*****************************************************************************************
+*  Name:        set_model_param_manual_trace_notifications_per_worker_day
+*  Description: Sets the value of parameter
+******************************************************************************************/
+int set_model_param_manual_trace_notifications_per_worker_day( model* model, int value )
+{
+	model->params->manual_trace_notifications_per_worker_day = value;
 
 	return TRUE;
 }
@@ -1058,6 +1264,18 @@ void check_params( parameters *params )
 		for( idx = 0; idx < N_AGE_TYPES; idx++ )
 			if( params->mean_random_interactions[idx] >= params->sd_random_interactions[idx] * params->sd_random_interactions[idx] )
 				print_exit( "BAD_PARAM - sd_random_interations_xxxx - variance must be greater than the mean for (negative binomial distribution");
+
+    if( params->test_on_traced )
+    {
+    	if( params->test_order_wait + params->test_result_wait == 0 )
+    		print_exit( "BAD_PARAM - total test time must be at least a day if using recursive testing");
+
+    	if( params->test_order_wait_priority != NO_PRIORITY_TEST )
+    	{
+    		if( params->test_order_wait_priority + params->test_result_wait_priority == 0 )
+    			print_exit( "BAD_PARAM - total test time must be at least a day if using recursive testing");
+    	}
+    }
 }
 
 /*****************************************************************************************

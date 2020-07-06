@@ -78,6 +78,7 @@ model* new_model( parameters *params )
 	set_up_app_users( model_ptr );
 	set_up_trace_tokens( model_ptr );
 	set_up_risk_scores( model_ptr );
+	set_up_counters( model_ptr );
 
 	model_ptr->n_quarantine_days = 0;
 
@@ -242,6 +243,38 @@ void set_up_networks( model *model )
 
 	for( idx =0; idx < N_AGE_TYPES; idx++ )
 		model->mean_interactions[idx] = estimate_mean_interactions_by_age( model, idx );
+}
+
+/*****************************************************************************************
+*  Name:		set_up_counters
+*  Description: sets up counters of events
+*  Returns:		void
+******************************************************************************************/
+void set_up_counters( model *model ){
+	
+	model->n_quarantine_infected = 0;
+	model->n_quarantine_recovered = 0;
+	model->n_quarantine_app_user = 0;
+	model->n_quarantine_app_user_infected = 0;
+	model->n_quarantine_app_user_recovered = 0;
+	// Daily totals
+	model->n_quarantine_events = 0;
+	model->n_quarantine_events_app_user = 0;
+	model->n_quarantine_release_events = 0;
+	model->n_quarantine_release_events_app_user = 0;
+}
+
+/*****************************************************************************************
+*  Name:		reset_counters
+*  Description: reset counters of events
+*  Returns:		void
+******************************************************************************************/
+void reset_counters( model *model ){
+
+	model->n_quarantine_events = 0;
+	model->n_quarantine_events_app_user = 0;
+	model->n_quarantine_release_events = 0;
+	model->n_quarantine_release_events_app_user = 0;
 }
 
 /*****************************************************************************************
@@ -685,6 +718,7 @@ void add_interactions_from_network(
 
 		inter1->type       = network->type;
 		inter1->traceable  = UNKNOWN;
+		inter1->manual_traceable  = UNKNOWN;
 		inter1->individual = indiv2;
 		inter1->next       = indiv1->interactions[ day ];
 		indiv1->interactions[ day ] = inter1;
@@ -692,6 +726,7 @@ void add_interactions_from_network(
 
 		inter2->type       = network->type;
 		inter2->traceable  = UNKNOWN;
+		inter2->manual_traceable  = UNKNOWN;
 		inter2->individual = indiv1;
 		inter2->next       = indiv2->interactions[ day ];
 		indiv2->interactions[ day ] = inter2;
@@ -856,7 +891,7 @@ int add_user_network(
 	// check to see that the edges all make sense
 	for( idx = 0; idx < n_edges; idx++ )
 	{
-		if( edgeStart[ idx ] < 0 | edgeEnd[ idx ] < 0 | edgeStart[ idx ] >= n_total | edgeEnd[ idx ] >= n_total )
+		if( (edgeStart[ idx ] < 0) | (edgeEnd[ idx ] < 0) | (edgeStart[ idx ] >= n_total) | (edgeEnd[ idx ] >= n_total) )
 		{
 			print_now( "edgeStart and edgeEnd can only contain indices between 0 and n_total" );
 			return FALSE;
@@ -938,6 +973,7 @@ void return_interactions( model *model )
 int one_time_step( model *model )
 {
 	(model->time)++;
+	reset_counters( model );
 	update_intervention_policy( model, model->time );
 
 	int idx;
@@ -970,10 +1006,11 @@ int one_time_step( model *model )
     }
 
 	flu_infections( model );
-	transition_events( model, TEST_TAKE,          &intervention_test_take,          TRUE );
-	transition_events( model, TEST_RESULT,        &intervention_test_result,        TRUE );
-	transition_events( model, QUARANTINE_RELEASE, &intervention_quarantine_release, FALSE );
-	transition_events( model, TRACE_TOKEN_RELEASE,&intervention_trace_token_release,FALSE );
+	transition_events( model, TEST_TAKE,              &intervention_test_take,          TRUE );
+	transition_events( model, TEST_RESULT,            &intervention_test_result,        TRUE );
+	transition_events( model, MANUAL_CONTACT_TRACING, &intervention_manual_trace,       TRUE );
+	transition_events( model, QUARANTINE_RELEASE,     &intervention_quarantine_release, FALSE );
+	transition_events( model, TRACE_TOKEN_RELEASE,    &intervention_trace_token_release,FALSE );
 
 	if( model->params->quarantine_smart_release_day > 0 )
 		intervention_smart_release( model );

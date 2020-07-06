@@ -16,6 +16,7 @@
 /************************************************************************/
 struct trace_token{
 	individual *individual;
+	individual *traced_from;
 	trace_token *next_index;
 	trace_token *last_index;
 	trace_token *next;
@@ -37,24 +38,25 @@ void update_intervention_policy( model*, int );
 void set_up_trace_tokens( model* );
 trace_token* new_trace_token( model*, individual*, int );
 trace_token* index_trace_token( model*, individual* );
+void remove_one_trace_token( model*, trace_token* );
 void remove_traced_on_this_trace( model*, individual* );
-void remove_one_trace_token_from_index( model*, trace_token* );
 void remove_traces_on_individual( model*, individual* );
 void intervention_trace_token_release( model*, individual* );
 
-int intervention_quarantine_until( model*, individual*, int, int, trace_token*, int, double );
+int intervention_quarantine_until( model*, individual*, individual*, int, int, trace_token*, int, double );
 void intervention_quarantine_release( model*, individual* );
 void intervention_quarantine_household( model*, individual*, int, int, trace_token*, int );
 void intervention_test_take( model*, individual* );
 void intervention_test_result( model*, individual* );
-void intervention_notify_contacts( model*, individual*, int, trace_token* );
+void intervention_manual_trace( model *, individual *);
+void intervention_notify_contacts( model*, individual*, int, trace_token*, int );
 void intervention_index_case_symptoms_to_positive( model*, trace_token* );
 
 void intervention_on_symptoms( model*, individual* );
 void intervention_on_hospitalised( model*, individual* );
 void intervention_on_critical( model*, individual* );
 void intervention_on_positive_result( model*, individual* );
-void intervention_on_traced( model*, individual*, int, int, trace_token*, double );
+void intervention_on_traced( model*, individual*, int, int, trace_token*, double, int );
 
 void intervention_smart_release( model* );
 int resolve_quarantine_reasons(int *);
