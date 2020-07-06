@@ -97,7 +97,7 @@ def build_population(params_dict, houses):
   ages = np.zeros( IDs.shape, dtype='int32' )
   idx = 0
   house_idx = 0
-  for house in houses.itertuples():
+  for house in houses.sample(frac=1).itertuples():
     house_pop = 0
     for col in houses.columns:
       if col.startswith("a_"):
