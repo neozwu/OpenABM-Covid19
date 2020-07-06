@@ -17,20 +17,24 @@ import numpy as np
 import os
 import sys
 
+def relative_path(filename: str) -> str:
+    return os.path.join(os.path.dirname(__file__), filename)
+
 parser = argparse.ArgumentParser(description="Run County Simluations.")
-parser.add_argument("--statewide_parameters", type=str, default="./data/us-wa/wa_state_parameters_transpose.csv", help="State-specific parameters file. Will overwite baseline values, but can be overwritten by individual county-level parameters. Reads as transpose file if 'transpose' is present in file name.")
-parser.add_argument("--county_parameters", type=str, default="./data/us-wa/wa_county_parameters.csv", help="County-specific parameters file(s). Will overwite baseline and state values. Expects an extra column of county_fips to designate which county this refers to.")
-parser.add_argument("--household_demographics", type=str, default="./data/us-wa/wa_county_household_demographics.csv", help="County-specific household demographics file(s). Expects an extra column of county_fips_code to designate which county this refers to.")
-parser.add_argument("--occupations", type=str, default="./data/us-wa/wa_county_occupation_networks.csv", help="County-specific household demographics file(s). Expects an extra column of county_fips_code to designate which county this refers to.")
+parser.add_argument("--statewide_parameters", type=str, default=relative_path("../data/us-wa/wa_state_parameters_transpose.csv"), help="State-specific parameters file. Will overwite baseline values, but can be overwritten by individual county-level parameters. Reads as transpose file if 'transpose' is present in file name.")
+parser.add_argument("--county_parameters", type=str, default=relative_path("../data/us-wa/wa_county_parameters.csv"), help="County-specific parameters file(s). Will overwite baseline and state values. Expects an extra column of county_fips to designate which county this refers to.")
+parser.add_argument("--household_demographics", type=str, default=relative_path("../data/us-wa/wa_county_household_demographics.csv"), help="County-specific household demographics file(s). Expects an extra column of county_fips_code to designate which county this refers to.")
+parser.add_argument("--occupations", type=str, default=relative_path("../data/us-wa/wa_county_occupation_networks.csv"), help="County-specific household demographics file(s). Expects an extra column of county_fips_code to designate which county this refers to.")
 parser.add_argument("--study_params", type=str, default=None, help="Optional. Parameter file with one set of overrides per line. If an extra column of \'study_name\" is used, will be used for writing results, otherwise the line number will be used.")
-parser.add_argument("--output_dir", type=str, default="./results/us-wa/")
-parser.add_argument("--input_base_dir", type=str, default="..", help="Optional. If specified, will be prepended to all input paths")
+parser.add_argument("--output_dir", type=str, default="results/us-wa/")
 parser.add_argument("--counties", type=str, default=None, help="Optional. If specified, only specified counties will be processed (comma-separated list).")
+
+DEFAULT_ARGS = parser.parse_args([])
 
 LOCAL_DEFAULT_PARAMS = {
     "county_fips": "00000",
     "lockdown_days": 35,
-    "app_turned_on": 1,
+    "app_users_fraction": 0.8,
     "custom_occupation_network": 1,
     "study_name": "0",
     "Index": 0,
@@ -40,6 +44,12 @@ AGE_BUCKETS=[f"{l}_{h}" for l, h in zip(range(0, 80, 10), range(9, 80, 10))] + [
 
 def bucket_to_age(b):
   return int(b.split("_")[1]) // 10
+
+def set_app_user_fraction(params, frac):
+    name = "app_users_fraction"
+    for b in age_buckets:
+      bucket_name = f"{name}_{b}"
+      params.set_param(bucket_name, params.get_param(bucket_name) * frac)
 
 def read_param_file(file_name):
   params = {}
@@ -66,7 +76,7 @@ def county_params_from_state(state_params, county_params):
   """
     Sets params from state data if not set in county data.
   """
-  scale_factor = county_params.n_total.sum() / county_params["n_total"]
+  scale_factor = county_params["n_total"] / county_params.n_total.sum()
   if "manual_trace_n_workers" not in county_params.columns:
     county_params["manual_trace_n_workers"] = (scale_factor * state_params["manual_trace_n_workers"]).round()
   for hs in HOUSEHOLD_SIZES:
@@ -81,9 +91,10 @@ def county_params_from_state(state_params, county_params):
       county_params[k] = v
 
 def build_population(params_dict, houses):
-  IDs = np.arange( params_dict["n_total"], dtype='int32')
+  n_total = params_dict["n_total"]
+  IDs = np.arange( n_total, dtype='int32')
   house_no = np.zeros( IDs.shape, dtype='int32' )
-  ages     = np.zeros( IDs.shape , dtype='int32' )
+  ages = np.zeros( IDs.shape, dtype='int32' )
   idx = 0
   house_idx = 0
   for house in houses.itertuples():
@@ -100,6 +111,8 @@ def build_population(params_dict, houses):
         idx += cnt
     if house_pop != 0:
       house_idx += 1
+    if house_pop >= n_total:
+      break
   return pd.DataFrame({'ID':IDs, 'age_group':ages, 'house_no':house_no})
 
 def sim_plot(axs, df, label, n_total, time_offset):
@@ -215,6 +228,7 @@ def run_model(params_dict, houses, sector_names, sector_pdf):
   params_dict = pt
 
   total_days_left = int(params_dict['end_time'])
+  app_turned_on = "app_turned_on" in params_dict and params_dict["app_turned_on"]
 
   params  = utils.get_baseline_parameters()
   for p, v in params_dict.items():
@@ -224,6 +238,9 @@ def run_model(params_dict, houses, sector_names, sector_pdf):
       params.set_param( p, int(v) )
     else:
       params.set_param( p, v )
+
+  if "app_user_fraction" in params_dict:
+    set_app_user_fraction(params, params_dict["app_user_fraction"])
   
   hh_df = build_population( params_dict, houses )
   params.set_demographic_household_table( hh_df )
@@ -255,6 +272,8 @@ def run_model(params_dict, houses, sector_names, sector_pdf):
   for step in range(total_days_left):
       if step == params_dict['lockdown_days']:
           model.update_running_params("lockdown_on", 0)
+          if app_turned_on == 1:
+              model.update_running_params("app_turned_on", 1)
           
       model.one_time_step()
       m_out.append(model.one_time_step_results())
@@ -267,12 +286,12 @@ def run_model(params_dict, houses, sector_names, sector_pdf):
 def run_counties(county_params, all_households, all_occupations, params_files=[], params_overrides={}, counties=None):
   if counties is None:
     counties = county_params.county_fips.unique()
-  base_params = params_overrides
-  base_params.update(read_param_files(params_files))
+  base_params = read_param_files(params_files)
   outputs = []
   for county in counties[:1]:
     params = base_params.copy()
     params.update(county_params[county_params["county_fips"] == county].iloc[0])
+    params.update(params_overrides)
     households = all_households[all_households["county_fips"] == county]
     sector_names, sector_pdf = read_county_occupation_network(county, all_occupations)
     outputs.append(run_model(params, households, sector_names, sector_pdf))
@@ -288,8 +307,20 @@ def remove_nans(d):
       pass
   return d
 
+class Network(object):
+  def __init__(self, households, sector_names, sector_pdf):
+    self.households = households
+    self.sector_names = sector_names
+    self.sector_pdf = sector_pdf
+
 class AggregateModel(object):
-  def __init__(self, param_files, households_file, occupations_file, county_params_file, params_overrides={}, run_parallel=True):
+  def __init__(self,
+               param_files=[DEFAULT_ARGS.statewide_parameters],
+               households_file=DEFAULT_ARGS.household_demographics,
+               occupations_file=DEFAULT_ARGS.occupations,
+               county_params_file=DEFAULT_ARGS.county_parameters,
+               params_overrides={},
+               run_parallel=True):
     self.params = read_param_files(param_files)
     self.params.update(params_overrides)
     self.households = pd.read_csv(households_file, skipinitialspace=True, comment="#")
@@ -308,22 +339,44 @@ class AggregateModel(object):
     params.update(params_overrides)
     return run_model(params, households, sector_names, sector_pdf)
 
+  def get_county_params(self, county_fips, params_overrides={}):
+    sector_names, sector_pdf = read_county_occupation_network(county_fips, self.occupations)
+    households = self.households[self.households["county_fips"] == county_fips]
+
+    params_dict = LOCAL_DEFAULT_PARAMS.copy()
+    params_dict.update(self.county_params.loc[county_fips].to_dict())
+    params_dict.update(params_overrides)
+
+    params  = utils.get_baseline_parameters()
+    for p, v in params_dict.items():
+      if p in LOCAL_DEFAULT_PARAMS:
+        continue
+      if isinstance(v, np.int64) or (hasattr(v, "is_integer") and v.is_integer()):
+        params.set_param( p, int(v) )
+      else:
+        params.set_param( p, v )
+
+    if "app_user_fraction" in params_dict:
+      set_app_user_fraction(params, params_dict["app_user_fraction"])
+    
+    hh_df = build_population( params_dict, households )
+    params.set_demographic_household_table( hh_df )
+    if params_dict["custom_occupation_network"]:
+      occupation_network_df = build_occupation_networks( params, sector_names )
+    
+      occupation_assignment = build_occupation_assignment( hh_df, occupation_network_df, sector_pdf )
+      params.set_occupation_network_table( occupation_assignment, occupation_network_df )
+    return params
+
   def run_counties(self, counties_fips, params_overrides={}):
     params_overrides = remove_nans(params_overrides)
     if self.run_parallel:
       from tqdm import tqdm, trange
       from concurrent.futures import ProcessPoolExecutor
 
-      progress_bar = True
-
-      if progress_bar:
-        progress_monitor = tqdm
-      else:
-        progress_monitor = lambda x: x
-
       with ProcessPoolExecutor() as ex:
         outputs = list(
-          progress_monitor(
+          tqdm(
             ex.map(self.run_county, counties_fips, itertools.repeat(params_overrides, len(counties_fips))),
             total=len(counties_fips),
             desc="Batch progress"
@@ -396,15 +449,15 @@ def main(args):
     counties = [int(c.strip()) for c in args.counties.split(',')]
 
   if args.study_params:
-    overrides = pd.read_csv(args.study_params)
+    overrides = pd.read_csv(args.study_params, comment="#")
     if "study_name" not in overrides:
       overrides["study_name"] = [f"{i}" for i in range(len(overrides))]
   else:
     overrides = pd.DataFrame({"study_name": ["0"]})
-  state_param_file = os.path.join(args.input_base_dir, args.statewide_parameters)
-  households_file = os.path.join(args.input_base_dir, args.household_demographics)
-  occupations_file = os.path.join(args.input_base_dir, args.occupations)
-  county_params_file = os.path.join(args.input_base_dir, args.county_parameters)
+  state_param_file = args.statewide_parameters
+  households_file = args.household_demographics
+  occupations_file = args.occupations
+  county_params_file = args.county_parameters
 
   model = AggregateModel([state_param_file], households_file, occupations_file, county_params_file)
   for override in overrides.itertuples():
