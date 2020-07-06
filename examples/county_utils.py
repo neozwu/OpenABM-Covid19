@@ -111,7 +111,7 @@ def build_population(params_dict, houses):
         idx += cnt
     if house_pop != 0:
       house_idx += 1
-    if house_pop >= n_total:
+    if idx >= n_total:
       break
   return pd.DataFrame({'ID':IDs, 'age_group':ages, 'house_no':house_no})
 
@@ -338,6 +338,13 @@ class AggregateModel(object):
     params = self.county_params.loc[county_fips].to_dict()
     params.update(params_overrides)
     return run_model(params, households, sector_names, sector_pdf)
+
+  def get_county_run(self, county_fips, params_overrides={}):
+    sector_names, sector_pdf = read_county_occupation_network(county_fips, self.occupations)
+    households = self.households[self.households["county_fips"] == county_fips]
+    params = self.county_params.loc[county_fips].to_dict()
+    params.update(params_overrides)
+    return params, Network(households, sector_names, sector_pdf)
 
   def get_county_params(self, county_fips, params_overrides={}):
     sector_names, sector_pdf = read_county_occupation_network(county_fips, self.occupations)
