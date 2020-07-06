@@ -36,11 +36,51 @@ LOCAL_DEFAULT_PARAMS = {
     "lockdown_days": 35,
     "app_users_fraction": 0.8,
     "custom_occupation_network": 1,
+    "use_default_lockdown_multiplier": True,
+    "use_default_work_interaction": True,
     "study_name": "0",
     "Index": 0,
 }
 HOUSEHOLD_SIZES=[f"household_size_{i}" for i in  range(1,7)]
 AGE_BUCKETS=[f"{l}_{h}" for l, h in zip(range(0, 80, 10), range(9, 80, 10))] + ["80"]
+
+# adjust lockdown_multiplier based on:
+# https://bfi.uchicago.edu/key-economic-facts-about-covid-19/#shutdown-sectors
+HIGH_IMPACT_LOCKDOWN_SECTORS = [
+  '72', # Accommodation and food services
+  '48-49', # Transportation and warehousing
+  '62', # Healthcare and social assistance
+  '71', # Arts, entertainment and recreation
+  '44-45', # Retail trade
+  '53', # Real estate and rental and leasing
+  '42', # Wholesale trade
+  '31-33', # Manufacturing
+]
+
+# adjust mean_work_interactions based on:
+# https://www.doh.wa.gov/Portals/1/Documents/1600/coronavirus/covid_occupation_industry_summary_2020-06-12.pdf
+WORK_INTERACTION_ADJUST_RATIO = {
+  '11':  0.06 / 0.03, # Agriculture, forestry, fishing and hunting
+  '21':  1.0, # Mining, quarrying, and oil and gas extraction
+  '22':  0.01 / 0.01, # Utilities
+  '23':  0.06 / 0.06,  # Construction
+  '31-33': 0.09 / 0.09, # Manufacturing
+  '42':  0.01 / 0.04, # Wholesale trade
+  '44-45':  0.08 / 0.12, # Retail trade
+  '48-49':  0.05 / 0.04, # Transportation and warehousing
+  '51':  0.01 / 0.04, # Information
+  '52':  0.02 / 0.03, # Finance and insurance
+  '53':  0.01 / 0.02, # Real estate and rental and leasing
+  '54':  0.03 / 0.06, #  Professional and technical services
+  '55':  0.01 / 0.02, # Management of companies and enterprises
+  '56':  0.04 / 0.05, # Administrative and waste services
+  '61':  0.03 / 0.09, # Educational services
+  '62':  0.37 / 0.13, # Health care and social assistance
+  '71':  0.01 / 0.02,  # Arts, entertainment, and recreation
+  '72':  0.07  / 0.09, # Accommodation and food services
+  '81':  0.02 / 0.03, # Other services, except public administration
+  '99':  1.0, # Unclassified
+}
 
 def bucket_to_age(b):
   return int(b.split("_")[1]) // 10
@@ -168,42 +208,73 @@ def read_county_occupation_network( county_fips, all_occupations ):
   sector_pdf = sector_size / np.sum( sector_size )
   return list( sector_name ), list( sector_pdf )
 
-def get_mean_work_interaction( params, age_type ):
-  if age_type == 0:
-    return params.get_param( 'mean_work_interactions_child' )
-  elif age_type == 1:
-    return params.get_param( 'mean_work_interactions_adult' )
-  elif age_type == 2:
-    return params.get_param( 'mean_work_interactions_elderly' )
+def get_mean_work_interaction( params, sector_names, age_type, use_default):
+  if use_default:
+    return get_default_mean_work_interaction( params, age_type )
   else:
-    raise ValueError( 'not supported age type' )
+    return get_custom_mean_work_interaction( params, sector_names, age_type )
 
-def get_lockdown_multipliers( params, n_networks ):
-  # For now, just use default lockdown_multipliers.
-  lockdown_multiplier = np.ones( n_networks ) * params.get_param('lockdown_occupation_multiplier_working_network')
+def get_custom_mean_work_interaction( params, sector_names, age_types ):
+  default_value = get_default_mean_work_interaction( params, age_types )
+  adjustment = [1.0, 1.0] + list(map(lambda x: WORK_INTERACTION_ADJUST_RATIO[x], sector_names)) + [1.0, 1.0]
+  return default_value * np.array(adjustment)
+
+def get_default_mean_work_interaction( params, age_types ):
+  def get_by_age_type( age_type ):
+    if age_type == 0:
+      return params.get_param( 'mean_work_interactions_child' )
+    elif age_type == 1:
+      return params.get_param( 'mean_work_interactions_adult' )
+    elif age_type == 2:
+      return params.get_param( 'mean_work_interactions_elderly' )
+    else:
+      raise ValueError( 'not supported age type' )
+
+  return np.array(list(map( lambda x: get_by_age_type( x ), age_types )))
+
+def get_lockdown_multipliers( params, sector_names, use_default ):
+  if use_default:
+    return get_default_lockdown_multipliers( params, sector_names )
+  else:
+    return get_custom_lockdown_multipliers( params, sector_names )
+
+def get_custom_lockdown_multipliers( params, sector_names ):
+  m = get_default_lockdown_multipliers( params, sector_names )
+  for i, sector_name in enumerate(sector_names):
+    if sector_name in HIGH_IMPACT_LOCKDOWN_SECTORS:
+      m[i+2] = m[i+2] * 0.5
+  return m
+
+def get_default_lockdown_multipliers( params, sector_names ):
+  lockdown_multiplier = np.ones(
+    len( sector_names ) + 4 ) * params.get_param('lockdown_occupation_multiplier_working_network')
   lockdown_multiplier[0] = params.get_param('lockdown_occupation_multiplier_primary_network')
   lockdown_multiplier[1] = params.get_param('lockdown_occupation_multiplier_secondary_network')
   lockdown_multiplier[-2] = params.get_param('lockdown_occupation_multiplier_retired_network')
   lockdown_multiplier[-1] = params.get_param('lockdown_occupation_multiplier_elderly_network')
   return lockdown_multiplier
 
-def build_occupation_networks( params, sector_names, n_child_network=2, n_elderly_network=2 ):
+def build_occupation_networks( params, sector_names,
+                               use_default_work_interaction=True,
+                               use_default_lockdown_multiplier=True,
+                               n_child_network=2,
+                               n_elderly_network=2):
   n_networks = n_child_network + len( sector_names ) + n_elderly_network
   network_no = np.arange( n_networks, dtype='int32' )
   network_names = ['primary', 'secondary'] + sector_names + ['retired', 'elderly']
   age_types = np.ones( n_networks )
   age_types[:2] = 0 # child
   age_types[-2:] = 2 # elderly
-  mean_work_interactions = map( lambda x: get_mean_work_interaction(params, x), 
-                                age_types )
-                                              
+  mean_work_interactions = get_mean_work_interaction( params, sector_names, age_types, use_default_work_interaction )
+  lockdown_multipliers = get_lockdown_multipliers( params, sector_names, use_default_lockdown_multiplier )
+
   return pd.DataFrame({
-      'network_no': network_no,
-      'age_type': age_types,
-      'mean_work_interaction': mean_work_interactions,
-      'lockdown_multiplier': get_lockdown_multipliers( params, n_networks ),
-      'network_id' : network_no,
-      'network_name': network_names
+    'network_no': network_no,
+    'age_type': age_types,
+    'mean_work_interaction': mean_work_interactions,
+    'lockdown_multiplier': lockdown_multipliers,
+    'network_id' : network_no,
+    'network_name': network_names
   })
 
 def build_occupation_assignment(household_df, network_df, network_pdf):
@@ -246,7 +317,9 @@ def run_model(params_dict, houses, sector_names, sector_pdf):
   params.set_demographic_household_table( hh_df )
   if params_dict["custom_occupation_network"]:
     occupation_network_df = build_occupation_networks( params, 
-                                                       sector_names )
+                                                       sector_names,
+                                                       params_dict['use_default_work_interaction'],
+                                                       params_dict['use_default_lockdown_multiplier'])
   
     occupation_assignment = build_occupation_assignment( hh_df, 
                                                          occupation_network_df, 
