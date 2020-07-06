@@ -20,13 +20,10 @@ lockdown_occupation_multiplier_retired_network,0.4
 lockdown_occupation_multiplier_secondary_network,0.1
 lockdown_occupation_multiplier_working_network,0.6
 lockdown_random_network_multiplier,0.4
-mean_random_interactions_child,4
 quarantine_dropout_self,0.05
 quarantine_dropout_traced_positive,0.1
 quarantine_dropout_traced_symptoms,0.1
-sd_random_interactions_child,4
 self_quarantine_fraction,0.8
-test_insensitive_period,1
 test_on_symptoms,1
 testing_symptoms_time_on,0
 trace_on_positive,1
