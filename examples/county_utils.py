@@ -85,9 +85,9 @@ WORK_INTERACTION_ADJUST_RATIO = {
 def bucket_to_age(b):
   return int(b.split("_")[1]) // 10
 
-def set_app_user_fraction(params, frac):
+def set_app_users_fraction(params, frac):
     name = "app_users_fraction"
-    for b in age_buckets:
+    for b in AGE_BUCKETS:
       bucket_name = f"{name}_{b}"
       params.set_param(bucket_name, params.get_param(bucket_name) * frac)
 
@@ -112,6 +112,12 @@ def set_unset(d, k, v):
   if k not in d:
     d[k] = v
 
+def print_params(params):
+  for k in dir(params.c_params):
+    if k.startswith("_"):
+      continue
+    print(f"{k}: {getattr(test_params.c_params, k)}")
+
 def county_params_from_state(state_params, county_params):
   """
     Sets params from state data if not set in county data.
@@ -129,6 +135,31 @@ def county_params_from_state(state_params, county_params):
   for k, v in state_params.items():
     if k not in county_params.columns:
       county_params[k] = v
+
+def setup_params(network, params_overrides={}):
+  params_dict = LOCAL_DEFAULT_PARAMS.copy()
+  params_dict.update(params_overrides)
+
+  params = utils.get_baseline_parameters()
+  for p, v in params_dict.items():
+    if p in LOCAL_DEFAULT_PARAMS:
+      continue
+    if isinstance(v, np.int64) or (hasattr(v, "is_integer") and v.is_integer()):
+      params.set_param( p, int(v) )
+    else:
+      params.set_param( p, v )
+
+  if "app_users_fraction" in params_dict:
+    set_app_users_fraction(params, params_dict["app_users_fraction"])
+  
+  hh_df = build_population( params_dict, network.households )
+  params.set_demographic_household_table( hh_df )
+  if params_dict["custom_occupation_network"]:
+    occupation_network_df = build_occupation_networks( params, network.sector_names )
+  
+    occupation_assignment = build_occupation_assignment( hh_df, occupation_network_df, network.sector_pdf )
+    params.set_occupation_network_table( occupation_assignment, occupation_network_df )
+  return params
 
 def build_population(params_dict, houses):
   n_total = params_dict["n_total"]
@@ -301,31 +332,7 @@ def run_model(params_dict, houses, sector_names, sector_pdf):
   total_days_left = int(params_dict['end_time'])
   app_turned_on = "app_turned_on" in params_dict and params_dict["app_turned_on"]
 
-  params  = utils.get_baseline_parameters()
-  for p, v in params_dict.items():
-    if p in LOCAL_DEFAULT_PARAMS:
-      continue
-    if isinstance(v, np.int64) or (hasattr(v, "is_integer") and v.is_integer()):
-      params.set_param( p, int(v) )
-    else:
-      params.set_param( p, v )
-
-  if "app_user_fraction" in params_dict:
-    set_app_user_fraction(params, params_dict["app_user_fraction"])
-  
-  hh_df = build_population( params_dict, houses )
-  params.set_demographic_household_table( hh_df )
-  if params_dict["custom_occupation_network"]:
-    occupation_network_df = build_occupation_networks( params, 
-                                                       sector_names,
-                                                       params_dict['use_default_work_interaction'],
-                                                       params_dict['use_default_lockdown_multiplier'])
-  
-    occupation_assignment = build_occupation_assignment( hh_df, 
-                                                         occupation_network_df, 
-                                                         sector_pdf )
-    params.set_occupation_network_table( occupation_assignment, 
-                                         occupation_network_df )
+  params = setup_params(Network(houses, sector_names, sector_pdf), params_dict)
 
   model = utils.get_simulation( params ).env.model
 
@@ -420,33 +427,9 @@ class AggregateModel(object):
     return params, Network(households, sector_names, sector_pdf)
 
   def get_county_params(self, county_fips, params_overrides={}):
-    sector_names, sector_pdf = read_county_occupation_network(county_fips, self.occupations)
-    households = self.households[self.households["county_fips"] == county_fips]
+    params, network = self.get_county_run(county_fips, params_overrides)
 
-    params_dict = LOCAL_DEFAULT_PARAMS.copy()
-    params_dict.update(self.county_params.loc[county_fips].to_dict())
-    params_dict.update(params_overrides)
-
-    params  = utils.get_baseline_parameters()
-    for p, v in params_dict.items():
-      if p in LOCAL_DEFAULT_PARAMS:
-        continue
-      if isinstance(v, np.int64) or (hasattr(v, "is_integer") and v.is_integer()):
-        params.set_param( p, int(v) )
-      else:
-        params.set_param( p, v )
-
-    if "app_user_fraction" in params_dict:
-      set_app_user_fraction(params, params_dict["app_user_fraction"])
-    
-    hh_df = build_population( params_dict, households )
-    params.set_demographic_household_table( hh_df )
-    if params_dict["custom_occupation_network"]:
-      occupation_network_df = build_occupation_networks( params, sector_names )
-    
-      occupation_assignment = build_occupation_assignment( hh_df, occupation_network_df, sector_pdf )
-      params.set_occupation_network_table( occupation_assignment, occupation_network_df )
-    return params
+    return setup_params(network, params)
 
   def run_counties(self, counties_fips, params_overrides={}):
     params_overrides = remove_nans(params_overrides)
