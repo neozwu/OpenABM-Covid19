@@ -277,6 +277,17 @@ class TestClass(object):
                     work_network_rewire            = 0.3
                 )
             ),
+            dict(
+                test_params = dict(
+                    n_total = 30,
+                    end_time = 15,
+                    mean_work_interactions_child   = 6,
+                    mean_work_interactions_adult   = 12,
+                    mean_work_interactions_elderly = 5,
+                    daily_fraction_work            = 0.25,
+                    work_network_rewire            = 0.3
+                )
+            ),
         ],
     }
     """
@@ -804,8 +815,3 @@ class TestClass(object):
             actual   = df_unique.loc[network,{"N_conn"}]["N_conn"]
             expected = mean_by_type[constant.CUSTOM_NETWORK_TYPE_MAP[network]]/test_params["daily_fraction_work"]
             np.testing.assert_allclose(actual,expected,rtol=tol,err_msg="Expected mean unique occupational contacts over multiple days not as expected")
-
-        
-        
-        
-        
