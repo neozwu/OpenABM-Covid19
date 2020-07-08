@@ -44,6 +44,7 @@ LOCAL_DEFAULT_PARAMS = {
     "study_name": "0",
     "Index": 0,
     "lockdown_scalars": "",
+    "changepoint_scalars": "",
     "seeding_date_delta": 0
 }
 HOUSEHOLD_SIZES=[f"household_size_{i}" for i in  range(1,7)]
@@ -329,7 +330,10 @@ def build_occupation_assignment(household_df, network_df, network_pdf):
 
   return pd.DataFrame({'ID': IDs, 'network_no': assignment})
 
-def run_lockdown(model, params_dict):
+def run_lockdown(network, params_dict):
+  params, occupation_network = setup_params(network, params_dict)
+  model = utils.get_simulation( params ).env.model
+
   total_days_left = int(params_dict['end_time'])
   m_out = []
   model.one_time_step()
@@ -361,14 +365,25 @@ def scale_lockdown(model, scalar, base_multipliers):
   for idx, base in base_multipliers[2:-2].iteritems():
     covid19.set_model_param_lockdown_occupation_multiplier(model.c_model, scalar * base, idx)
 
-def run_baseline_forecast(model, params_dict, occupation_network):
+def run_baseline_forecast(network, params_dict):
+  params, occupation_network = setup_params(network, params_dict)
+  model = utils.get_simulation( params ).env.model
+
   if isinstance(params_dict["lockdown_scalars"], list):
     scalars = params_dict["lockdown_scalars"]
   else:
     scalars = [float(x) for x in params_dict["lockdown_scalars"].split(",")]
 
+  if isinstance(params_dict["changepoint_scalars"], list):
+    changepoints = params_dict["changepoint_scalars"]
+  else:
+    changepoints = [float(x) for x in params_dict["changepoint_scalars"].split(",")]
+
   base_multipliers = occupation_network.lockdown_multiplier
   base_random = model.get_param("lockdown_random_network_multiplier")
+
+  base_rel_trans_rand = params.get_param("relative_transmission_random")
+  base_rel_trans_occ = params.get_param("relative_transmission_occupation")
 
   m_out = []
   seeding_date_delta = params_dict["seeding_date_delta"]
@@ -385,6 +400,9 @@ def run_baseline_forecast(model, params_dict, occupation_network):
     scale_lockdown(model, scalars[step], base_multipliers)
     # Scale random network too.
     model.update_running_params('lockdown_random_network_multiplier', scalars[step] * base_random)
+
+    model.update_running_params('relative_transmission_random', changepoints[step] * base_rel_trans_rand)
+    model.update_running_params('relative_transmission_occupation', changepoints[step] * base_rel_trans_occ)
 
     model.one_time_step()
     m_out.append(model.one_time_step_results())
@@ -405,14 +423,12 @@ def run_model(params_dict, houses, sector_names, sector_pdf):
   pt.update(params_dict)
   params_dict = pt
 
-  params, occupation_network = setup_params(Network(houses, sector_names, sector_pdf), params_dict)
-
-  model = utils.get_simulation( params ).env.model
+  network = Network(houses, sector_names, sector_pdf)
 
   if params_dict["lockdown_scalars"]:
-    m_out = run_baseline_forecast(model, params_dict, occupation_network)
+    m_out = run_baseline_forecast(network, params_dict)
   else:
-    m_out = run_lockdown(model, params_dict)
+    m_out = run_lockdown(network, params_dict)
 
   df = pd.DataFrame( m_out )
   del model
