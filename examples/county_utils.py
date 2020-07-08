@@ -16,6 +16,7 @@ import pandas as pd
 import numpy as np
 import os
 import sys
+import covid19
 
 def relative_path(filename: str) -> str:
     return os.path.join(os.path.dirname(__file__), filename)
@@ -34,12 +35,15 @@ DEFAULT_ARGS = parser.parse_args([])
 LOCAL_DEFAULT_PARAMS = {
     "county_fips": "00000",
     "lockdown_days": 35,
+    "app_turned_on": 0,
+    "manual_tracing_on": 0,
     "app_users_fraction": 0.8,
     "custom_occupation_network": 1,
     "use_default_lockdown_multiplier": True,
     "use_default_work_interaction": True,
     "study_name": "0",
     "Index": 0,
+    "lockdown_scalars": ""
 }
 HOUSEHOLD_SIZES=[f"household_size_{i}" for i in  range(1,7)]
 AGE_BUCKETS=[f"{l}_{h}" for l, h in zip(range(0, 80, 10), range(9, 80, 10))] + ["80"]
@@ -159,7 +163,7 @@ def setup_params(network, params_overrides={}):
   
     occupation_assignment = build_occupation_assignment( hh_df, occupation_network_df, network.sector_pdf )
     params.set_occupation_network_table( occupation_assignment, occupation_network_df )
-  return params
+  return params, occupation_network_df
 
 def build_population(params_dict, houses):
   n_total = params_dict["n_total"]
@@ -324,42 +328,79 @@ def build_occupation_assignment(household_df, network_df, network_pdf):
 
   return pd.DataFrame({'ID': IDs, 'network_no': assignment})
 
-def run_model(params_dict, houses, sector_names, sector_pdf):
-  pt = LOCAL_DEFAULT_PARAMS.copy()
-  pt.update(params_dict)
-  params_dict = pt
-
+def run_lockdown(model, params_dict):
   total_days_left = int(params_dict['end_time'])
-  app_turned_on = "app_turned_on" in params_dict and params_dict["app_turned_on"]
-
-  params = setup_params(Network(houses, sector_names, sector_pdf), params_dict)
-
-  model = utils.get_simulation( params ).env.model
-
   m_out = []
   model.one_time_step()
   m_out.append(model.one_time_step_results())
   total_days_left -= 1
   while m_out[-1]["total_infected"] < params_dict["n_total"] * 0.01:
-      model.one_time_step()
-      m_out.append(model.one_time_step_results())
-      total_days_left -= 1
+    model.one_time_step()
+    m_out.append(model.one_time_step_results())
+    total_days_left -= 1
 
   params_dict["time_offset"] = params_dict['end_time'] - total_days_left
 
   model.update_running_params("lockdown_on", 1)
           
   for step in range(total_days_left):
-      if step == params_dict['lockdown_days']:
-          model.update_running_params("lockdown_on", 0)
-          if app_turned_on == 1:
-              model.update_running_params("app_turned_on", 1)
+    if step == params_dict['lockdown_days']:
+      model.update_running_params("lockdown_on", 0)
+      if params_dict["app_turned_on"]:
+        model.update_running_params("app_turned_on", 1)
+      if params_dict["manual_tracing_on"]:
+        model.update_running_params("manual_tracing_on", 1)
+        
+    model.one_time_step()
+    m_out.append(model.one_time_step_results())
+  return m_out
+
+def scale_lockdown(model, scalar, base_multipliers):
+  for idx, base in enumerate(base_multipliers):
+    covid19.set_model_param_lockdown_occupation_multiplier(model.c_model, scalar * base, idx)
+
+def run_baseline_forecast(model, params_dict, occupation_network):
+  if isinstance(params_dict["lockdown_scalars"], list):
+    scalars = params_dict["lockdown_scalars"]
+  else:
+    scalars = [float(x) for x in params_dict["lockdown_scalars"].split(",")]
+
+  base_multipliers = occupation_network.lockdown_multiplier
+
+  m_out = []
+  baseline_days = len(scalars)
+  params_dict["time_offset"] = baseline_days 
+
+  model.update_running_params("lockdown_on", 1)
           
-      model.one_time_step()
-      m_out.append(model.one_time_step_results())
+  for step in range(params_dict["end_time"]):
+    if step < baseline_days:
+      scale_lockdown(model, scalars[step], base_multipliers)
+    if step == baseline_days:
+      if params_dict["app_turned_on"]:
+        model.update_running_params("app_turned_on", 1)
+      if params_dict["manual_tracing_on"]:
+        model.update_running_params("manual_tracing_on", 1)
+        
+    model.one_time_step()
+    m_out.append(model.one_time_step_results())
+  return m_out
+
+def run_model(params_dict, houses, sector_names, sector_pdf):
+  pt = LOCAL_DEFAULT_PARAMS.copy()
+  pt.update(params_dict)
+  params_dict = pt
+
+  params, occupation_network = setup_params(Network(houses, sector_names, sector_pdf), params_dict)
+
+  model = utils.get_simulation( params ).env.model
+
+  if params_dict["lockdown_scalars"]:
+    m_out = run_baseline_forecast(model, params_dict, occupation_network)
+  else:
+    m_out = run_lockdown(model, params_dict)
 
   df = pd.DataFrame( m_out )
-  m_out = []
   del model
   return params_dict, df
 
@@ -383,7 +424,7 @@ def remove_nans(d):
     try:
       if np.isnan(d[k]):
         del d[k]
-    except TypeError:
+    except (TypeError, ValueError):
       pass
   return d
 
@@ -429,7 +470,7 @@ class AggregateModel(object):
   def get_county_params(self, county_fips, params_overrides={}):
     params, network = self.get_county_run(county_fips, params_overrides)
 
-    return setup_params(network, params)
+    return setup_params(network, params)[0]
 
   def run_counties(self, counties_fips, params_overrides={}):
     params_overrides = remove_nans(params_overrides)
