@@ -13,7 +13,6 @@ app_users_fraction_60_69,0.66
 app_users_fraction_70_79,0.53
 app_users_fraction_80,0.53
 end_time,250
-lockdown_house_interaction_multiplier,1.2
 lockdown_occupation_multiplier_elderly_network,0.5
 lockdown_occupation_multiplier_primary_network,0.05
 lockdown_occupation_multiplier_retired_network,0.5
