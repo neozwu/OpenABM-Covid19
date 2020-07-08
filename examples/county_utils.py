@@ -160,6 +160,7 @@ def setup_params(network, params_overrides={}):
   
   hh_df = build_population( params_dict, network.households )
   params.set_demographic_household_table( hh_df )
+  occupation_network_df = None
   if params_dict["custom_occupation_network"]:
     occupation_network_df = build_occupation_networks( params, network.sector_names )
   
@@ -380,7 +381,16 @@ def run_baseline_forecast(network, params_dict):
   else:
     changepoints = [float(x) for x in params_dict["changepoint_scalars"].split(",")]
 
-  base_multipliers = occupation_network.lockdown_multiplier
+  if occupation_network:
+    base_multipliers = occupation_network.lockdown_multiplier
+  else:
+    base_multipliers = pd.Series([
+      params.get_param('lockdown_occupation_multiplier_primary_network'),
+      params.get_param('lockdown_occupation_multiplier_secondary_network'),
+      params.get_param('lockdown_occupation_multiplier_working_network'),
+      params.get_param('lockdown_occupation_multiplier_retired_network'),
+      params.get_param('lockdown_occupation_multiplier_elderly_network'),
+    ])
   base_random = model.get_param("lockdown_random_network_multiplier")
 
   base_rel_trans_rand = params.get_param("relative_transmission_random")
