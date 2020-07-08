@@ -290,8 +290,8 @@ def get_default_lockdown_multipliers( params, sector_names ):
   return lockdown_multiplier
 
 def build_occupation_networks( params, sector_names,
-                               use_default_work_interaction=True,
-                               use_default_lockdown_multiplier=True,
+                               use_default_work_interaction=False,
+                               use_default_lockdown_multiplier=False,
                                n_child_network=2,
                                n_elderly_network=2):
   n_networks = n_child_network + len( sector_names ) + n_elderly_network
@@ -356,7 +356,8 @@ def run_lockdown(model, params_dict):
   return m_out
 
 def scale_lockdown(model, scalar, base_multipliers):
-  for idx, base in enumerate(base_multipliers):
+  # Ignore school and elderly networks.
+  for idx, base in base_multipliers[2:-2].iteritems():
     covid19.set_model_param_lockdown_occupation_multiplier(model.c_model, scalar * base, idx)
 
 def run_baseline_forecast(model, params_dict, occupation_network):
@@ -366,6 +367,7 @@ def run_baseline_forecast(model, params_dict, occupation_network):
     scalars = [float(x) for x in params_dict["lockdown_scalars"].split(",")]
 
   base_multipliers = occupation_network.lockdown_multiplier
+  base_random = model.get_param("lockdown_random_network_multiplier")
 
   m_out = []
   baseline_days = len(scalars)
@@ -376,6 +378,8 @@ def run_baseline_forecast(model, params_dict, occupation_network):
   for step in range(params_dict["end_time"]):
     if step < baseline_days:
       scale_lockdown(model, scalars[step], base_multipliers)
+      # Scale random network too.
+      model.update_running_params('lockdown_random_network_multiplier', scalars[step] * base_random)
     if step == baseline_days:
       if params_dict["app_turned_on"]:
         model.update_running_params("app_turned_on", 1)
