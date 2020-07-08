@@ -40,7 +40,7 @@ LOCAL_DEFAULT_PARAMS = {
     "app_users_fraction": 0.8,
     "custom_occupation_network": 1,
     "use_default_lockdown_multiplier": True,
-    "use_default_work_interaction": True,
+    "use_default_work_interaction": False,
     "study_name": "0",
     "Index": 0,
     "lockdown_scalars": "",
@@ -293,7 +293,7 @@ def get_default_lockdown_multipliers( params, sector_names ):
 
 def build_occupation_networks( params, sector_names,
                                use_default_work_interaction=False,
-                               use_default_lockdown_multiplier=False,
+                               use_default_lockdown_multiplier=True,
                                n_child_network=2,
                                n_elderly_network=2):
   n_networks = n_child_network + len( sector_names ) + n_elderly_network
