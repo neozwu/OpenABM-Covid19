@@ -358,6 +358,7 @@ def run_lockdown(network, params_dict):
         
     model.one_time_step()
     m_out.append(model.one_time_step_results())
+  del model
   return m_out
 
 def scale_lockdown(model, scalar, base_multipliers):
@@ -416,6 +417,7 @@ def run_baseline_forecast(network, params_dict):
     model.one_time_step()
     m_out.append(model.one_time_step_results())
 
+  del model
   return m_out
 
 def run_model(params_dict, houses, sector_names, sector_pdf):
@@ -431,7 +433,6 @@ def run_model(params_dict, houses, sector_names, sector_pdf):
     m_out = run_lockdown(network, params_dict)
 
   df = pd.DataFrame( m_out )
-  del model
   return params_dict, df
 
 def run_counties(county_params, all_households, all_occupations, params_files=[], params_overrides={}, counties=None):
