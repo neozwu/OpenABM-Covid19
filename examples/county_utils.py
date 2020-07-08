@@ -43,7 +43,8 @@ LOCAL_DEFAULT_PARAMS = {
     "use_default_work_interaction": True,
     "study_name": "0",
     "Index": 0,
-    "lockdown_scalars": ""
+    "lockdown_scalars": "",
+    "seeding_date_delta": 0
 }
 HOUSEHOLD_SIZES=[f"household_size_{i}" for i in  range(1,7)]
 AGE_BUCKETS=[f"{l}_{h}" for l, h in zip(range(0, 80, 10), range(9, 80, 10))] + ["80"]
@@ -370,24 +371,33 @@ def run_baseline_forecast(model, params_dict, occupation_network):
   base_random = model.get_param("lockdown_random_network_multiplier")
 
   m_out = []
-  baseline_days = len(scalars)
-  params_dict["time_offset"] = baseline_days 
+  seeding_date_delta = params_dict["seeding_date_delta"]
+  baseline_days = len(scalars) + seeding_date_delta
+  params_dict["time_offset"] = baseline_days
 
-  model.update_running_params("lockdown_on", 1)
-          
-  for step in range(params_dict["end_time"]):
-    if step < baseline_days:
-      scale_lockdown(model, scalars[step], base_multipliers)
-      # Scale random network too.
-      model.update_running_params('lockdown_random_network_multiplier', scalars[step] * base_random)
-    if step == baseline_days:
-      if params_dict["app_turned_on"]:
-        model.update_running_params("app_turned_on", 1)
-      if params_dict["manual_tracing_on"]:
-        model.update_running_params("manual_tracing_on", 1)
-        
+  for step in range(seeding_date_delta):
     model.one_time_step()
     m_out.append(model.one_time_step_results())
+
+  model.update_running_params("lockdown_on", 1)
+
+  for step in range(len(scalars)):
+    scale_lockdown(model, scalars[step], base_multipliers)
+    # Scale random network too.
+    model.update_running_params('lockdown_random_network_multiplier', scalars[step] * base_random)
+
+    model.one_time_step()
+    m_out.append(model.one_time_step_results())
+
+  if params_dict["app_turned_on"]:
+    model.update_running_params("app_turned_on", 1)
+  if params_dict["manual_tracing_on"]:
+    model.update_running_params("manual_tracing_on", 1)
+          
+  for step in range(params_dict["end_time"] - baseline_days):
+    model.one_time_step()
+    m_out.append(model.one_time_step_results())
+
   return m_out
 
 def run_model(params_dict, houses, sector_names, sector_pdf):
