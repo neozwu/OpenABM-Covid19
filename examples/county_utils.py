@@ -381,7 +381,7 @@ def run_baseline_forecast(network, params_dict):
   else:
     changepoints = [float(x) for x in params_dict["changepoint_scalars"].split(",")]
 
-  if occupation_network:
+  if occupation_network is not None:
     base_multipliers = occupation_network.lockdown_multiplier
   else:
     base_multipliers = pd.Series([
