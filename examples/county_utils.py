@@ -173,7 +173,7 @@ def setup_params(network, params_overrides={}):
     set_app_users_fraction(params, params_dict["app_users_fraction"])
   
   if "rng_seed" in params_dict:
-    np.random.seed(params_dict["rng_seed"])
+    np.random.seed(int(params_dict["rng_seed"]))
   hh_df = build_population( params_dict, network.households )
   params.set_demographic_household_table( hh_df )
   occupation_network_df = None
