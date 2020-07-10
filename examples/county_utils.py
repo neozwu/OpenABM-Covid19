@@ -17,6 +17,8 @@ import numpy as np
 import os
 import sys
 import covid19
+from tqdm import tqdm, trange
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 def relative_path(filename: str) -> str:
     return os.path.join(os.path.dirname(__file__), filename)
@@ -45,7 +47,11 @@ LOCAL_DEFAULT_PARAMS = {
     "Index": 0,
     "lockdown_scalars": "",
     "changepoint_scalars": "",
-    "seeding_date_delta": 0
+    "seeding_date_delta": 0,
+    "mobility_on": 0, # No effect yet. TODO(mattea): Implement once we have values for all counties
+    "changepoint_on": 0, # No effect yet. TODO(mattea): Implement once we have values for all counties
+    "mobility_scale_all": 0,
+    "static_mobility_scalar": 0,
 }
 HOUSEHOLD_SIZES=[f"household_size_{i}" for i in  range(1,7)]
 AGE_BUCKETS=[f"{l}_{h}" for l, h in zip(range(0, 80, 10), range(9, 80, 10))] + ["80"]
@@ -87,6 +93,14 @@ WORK_INTERACTION_ADJUST_RATIO = {
   '81':  0.02 / 0.03, # Other services, except public administration
   '99':  1.0, # Unclassified
 }
+
+def cycle(l, n):
+  return itertools.chain.from_iterable(itertools.repeat(l, n))
+
+def stringify(p):
+  for k in p.keys():
+    if isinstance(p[k], list):
+      p[k] = ",".join([f"{v}" for v in p[k]])
 
 def bucket_to_age(b):
   return int(b.split("_")[1]) // 10
@@ -158,6 +172,8 @@ def setup_params(network, params_overrides={}):
   if "app_users_fraction" in params_dict:
     set_app_users_fraction(params, params_dict["app_users_fraction"])
   
+  if "rng_seed" in params_dict:
+    np.random.seed(params_dict["rng_seed"])
   hh_df = build_population( params_dict, network.households )
   params.set_demographic_household_table( hh_df )
   occupation_network_df = None
@@ -195,17 +211,29 @@ def build_population(params_dict, houses):
 
 def sim_plot(axs, df, label, n_total, time_offset):
   """Plot the simulation result to the given axes"""
-  diff = df.diff()
+  if "iteration" in df.columns:
+    diff = df.groupby(["iteration"]).transform(lambda x: x.diff())
+  else:
+    diff = df.diff()
   df['new_infected'] = diff["total_infected"]
   df['new_death'] = diff["n_death"]
   df["total_infected_rate"] = df["total_infected"] / n_total
   df["quarantine_rate"] = df["n_quarantine"] / n_total
-  df["time (days))"] = df["time"] - time_offset
-  df.plot( ax=axs[0], x = "time (days))", y = "new_infected", label=label, legend=False)
-  df.plot( ax=axs[1], x = "time (days))", y = "total_infected_rate", label=label, legend=False )
-  df.plot( ax=axs[2], x = "time (days))", y = "n_hospital", label=label, legend=False)
-  df.plot( ax=axs[3], x = "time (days))", y = "n_tests", label=label, legend=False)
-  df.plot( ax=axs[4], x = "time (days))", y = "quarantine_rate", label=label, legend=False)
+  df["time (days)"] = df["time"] - time_offset
+
+  if "iteration" in df.columns and df.iteration.max() > 0:
+    dgroup = df.groupby(["time (days)"])
+    dlow = dgroup.quantile([0.05])
+    dmed = dgroup.mean()
+    dhigh = dgroup.quantile([0.95])
+
+    for ax, y in zip(axs, ["new_infected", "total_infected", "total_infected_rate", "n_death", "n_hospital", "n_tests", "quarantine_rate"]):
+      dmed.plot( ax=ax, y = y, label=label, legend=False)
+      ax.fill_between(dmed.index, dlow[y], dhigh[y], alpha=0.25)
+
+  else:
+    for ax, y in zip(axs, ["new_infected", "total_infected", "total_infected_rate", "n_death", "n_hospital", "n_tests", "quarantine_rate"]):
+      df.plot( ax=ax, x = "time (days)", y = y, label=label, legend=False)
 
 def common_prefix(labels):
   psubstr = ""
@@ -221,14 +249,16 @@ def common_prefix(labels):
 
 def sim_display(results, labels):
   """Display the simulation results."""
-  fig, axs = plt.subplots(2,3,figsize=(12,7.2),constrained_layout=True)
+  fig, axs = plt.subplots(2,4,figsize=(16,7.2),constrained_layout=True)
   axs = axs.flatten()
-  axs[5].remove()
+  axs[7].remove()
   axs[0].set_title('new infected')
-  axs[1].set_title('total infected percentage')
-  axs[2].set_title('total in hospital')
-  axs[3].set_title('tests per day')
-  axs[4].set_title('percent in quarantine')
+  axs[1].set_title('total infected')
+  axs[2].set_title('total infected percentage')
+  axs[3].set_title('total deaths')
+  axs[4].set_title('total in hospital')
+  axs[5].set_title('tests per day')
+  axs[6].set_title('percent in quarantine')
   label_prefix = common_prefix(labels)
   if label_prefix:
     labels = [label[len(label_prefix):] for label in labels]
@@ -236,7 +266,7 @@ def sim_display(results, labels):
   for result, label in zip(results,labels):
       param_model, result = result
       sim_plot(axs, result, label, param_model['n_total'], param_model['time_offset'])
-  axs[2].legend(bbox_to_anchor=(0, -0.2),loc='upper left',
+  axs[3].legend(bbox_to_anchor=(0, -0.2),loc='upper left',
                   title=label_prefix, ncol=math.ceil(len(results) / 12)).set_in_layout(False)
 
 def read_county_occupation_network( county_fips, all_occupations ):
@@ -362,10 +392,14 @@ def run_lockdown(network, params_dict):
   del model
   return m_out
 
-def scale_lockdown(model, scalar, base_multipliers):
-  # Ignore school and elderly networks.
-  for idx, base in base_multipliers[2:-2].iteritems():
-    covid19.set_model_param_lockdown_occupation_multiplier(model.c_model, scalar * base, idx)
+def scale_lockdown(model, scalar, base_multipliers, scale_all=False):
+  if scale_all:
+    for idx, base in base_multipliers.iteritems():
+      covid19.set_model_param_lockdown_occupation_multiplier(model.c_model, scalar * base, idx)
+  else:
+    # Ignore school and elderly networks.
+    for idx, base in base_multipliers[2:-2].iteritems():
+      covid19.set_model_param_lockdown_occupation_multiplier(model.c_model, scalar * base, idx)
 
 def run_baseline_forecast(network, params_dict):
   params, occupation_network = setup_params(network, params_dict)
@@ -382,7 +416,7 @@ def run_baseline_forecast(network, params_dict):
     changepoints = [float(x) for x in params_dict["changepoint_scalars"].split(",")]
 
   if occupation_network is not None:
-    base_multipliers = occupation_network.lockdown_multiplier
+    base_multipliers = occupation_network.lockdown_multiplier.copy()
   else:
     base_multipliers = pd.Series([
       params.get_param('lockdown_occupation_multiplier_primary_network'),
@@ -391,6 +425,11 @@ def run_baseline_forecast(network, params_dict):
       params.get_param('lockdown_occupation_multiplier_retired_network'),
       params.get_param('lockdown_occupation_multiplier_elderly_network'),
     ])
+
+  if params_dict["static_mobility_scalar"]:
+    base_multipliers[:] = 1
+  scale_all = params_dict["mobility_scale_all"]
+
   base_random = model.get_param("lockdown_random_network_multiplier")
 
   base_rel_trans_rand = params.get_param("relative_transmission_random")
@@ -408,7 +447,7 @@ def run_baseline_forecast(network, params_dict):
   model.update_running_params("lockdown_on", 1)
 
   for step in range(len(scalars)):
-    scale_lockdown(model, scalars[step], base_multipliers)
+    scale_lockdown(model, scalars[step], base_multipliers, scale_all)
     # Scale random network too.
     model.update_running_params('lockdown_random_network_multiplier', scalars[step] * base_random)
 
@@ -482,7 +521,8 @@ class AggregateModel(object):
                occupations_file=DEFAULT_ARGS.occupations,
                county_params_file=DEFAULT_ARGS.county_parameters,
                params_overrides={},
-               run_parallel=True):
+               run_parallel=True,
+               n_iterations=1):
     self.params = read_param_files(param_files)
     self.params.update(params_overrides)
     self.households = pd.read_csv(households_file, skipinitialspace=True, comment="#")
@@ -493,6 +533,7 @@ class AggregateModel(object):
     self.run_parallel = run_parallel
     self.results = {}
     self.merged_results = None
+    self.n_iterations = n_iterations
 
   def run_county(self, county_fips, params_overrides={}):
     sector_names, sector_pdf = read_county_occupation_network(county_fips, self.occupations)
@@ -515,22 +556,40 @@ class AggregateModel(object):
 
   def run_counties(self, counties_fips, params_overrides={}):
     params_overrides = remove_nans(params_overrides)
-    if self.run_parallel:
-      from tqdm import tqdm, trange
-      from concurrent.futures import ProcessPoolExecutor
+    n_iterations = self.n_iterations
+    n_runs = n_iterations * len(counties_fips)
+    all_params = []
+    for idx in range(n_iterations):
+      p = params_overrides.copy()
+      if "rng_seed" in p:
+        p["rng_seed"] += idx * 10
+      all_params.append(itertools.repeat(p, len(counties_fips)))
+    all_params = itertools.chain.from_iterable(all_params)
 
-      with ProcessPoolExecutor() as ex:
-        outputs = list(
-          tqdm(
-            ex.map(self.run_county, counties_fips, itertools.repeat(params_overrides, len(counties_fips))),
-            total=len(counties_fips),
-            desc="Batch progress"
-          )
-        )
-        self.results = dict(zip(counties_fips, outputs))
+    if self.run_parallel:
+      runner = ProcessPoolExecutor
     else:
-      for county in counties_fips:
-        self.results[county] = self.run_county(county)
+      runner = lambda: ThreadPoolExecutor(max_workers=1)
+
+    with runner() as ex:
+      outputs = list(
+        tqdm(
+          ex.map(self.run_county,
+                 cycle(counties_fips, n_iterations),
+                 all_params),
+          total=n_runs,
+          desc="Batch progress"
+        )
+      )
+
+    results = collections.defaultdict(list)
+    for county_fips, output in zip(cycle(counties_fips, n_iterations), outputs):
+      output[1]["iteration"] = len(results[county_fips])
+      results[county_fips].append(output)
+    for county_fips, all_results in results.items():
+      df = pd.concat([result for _, result in all_results])
+      self.results[county_fips] = [all_results[0][0], df]
+
     return self.results
 
   def run_all(self, params_overrides={}):
@@ -538,10 +597,11 @@ class AggregateModel(object):
     return self.results
 
   def merge_results(self):
-    merged_results = pd.concat([result[1] for result in self.results.values()]).groupby(["time"]).sum().reset_index()
+    merged_results = pd.concat([result[1] for result in self.results.values()]).groupby(["iteration","time"]).sum().reset_index()
     merged_params = next(iter(self.results.values()))[0].copy()
     merged_params["n_total"] = sum((result[0]["n_total"] for result in self.results.values()))
-    merged_params["time_offset"] = 0
+    if not merged_params["lockdown_scalars"]:
+      merged_params["time_offset"] = 0
     self.merged_results = [merged_params, merged_results]
     return self.merged_results
 
@@ -552,6 +612,11 @@ class AggregateModel(object):
       self.merge_results()
     sim_display([self.merged_results], ["AggregateModel"])
 
+  def plot_county(self, county_fips):
+    if county_fips not in self.results:
+      return
+    sim_display([result], [f"County {county_fips}"])
+
   def write_results(self, output_dir, write_merged=True):
     if not self.results:
       return
@@ -560,17 +625,17 @@ class AggregateModel(object):
     except FileExistsError:
       pass
 
-    for county, output in self.results.items():
-      params, result = output
-      pd.DataFrame(params, index=[0]).to_csv(os.path.join(output_dir, f"{county}_params.csv"), index=False)
-      result.to_csv(os.path.join(output_dir, f"{county}_results.csv"), index=False)
+    for county, outputs in self.results.items():
+      pd.DataFrame(outputs[0][0], index=[0]).to_csv(os.path.join(output_dir, f"{county}_params.csv"), index=False)
+      for idx, output in enumerate(outputs):
+        output[1].to_csv(os.path.join(output_dir, f"{county}_{idx}_results.csv"), index=False)
 
     if not write_merged:
       return
     if not self.merged_results:
       self.merge_results()
     params, result = self.merged_results
-    pd.DataFrame(params, index=[0]).to_csv(os.path.join(output_dir, f"merged_params.csv"), index=False)
+    pd.DataFrame(stringify(params), index=[0]).to_csv(os.path.join(output_dir, f"merged_params.csv"), index=False)
     result.to_csv(os.path.join(output_dir, f"merged_results.csv"), index=False)
 
 
