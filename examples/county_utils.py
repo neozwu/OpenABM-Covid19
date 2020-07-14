@@ -20,6 +20,7 @@ import covid19
 from tqdm import tqdm, trange
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
+
 def relative_path(filename: str) -> str:
     return os.path.join(os.path.dirname(__file__), filename)
 
@@ -28,9 +29,11 @@ parser.add_argument("--statewide_parameters", type=str, default=relative_path(".
 parser.add_argument("--county_parameters", type=str, default=relative_path("../data/us-wa/wa_county_parameters.csv"), help="County-specific parameters file(s). Will overwite baseline and state values. Expects an extra column of county_fips to designate which county this refers to.")
 parser.add_argument("--household_demographics", type=str, default=relative_path("../data/us-wa/wa_county_household_demographics.csv"), help="County-specific household demographics file(s). Expects an extra column of county_fips_code to designate which county this refers to.")
 parser.add_argument("--occupations", type=str, default=relative_path("../data/us-wa/wa_county_occupation_networks.csv"), help="County-specific household demographics file(s). Expects an extra column of county_fips_code to designate which county this refers to.")
-parser.add_argument("--study_params", type=str, default=None, help="Optional. Parameter file with one set of overrides per line. If an extra column of \'study_name\" is used, will be used for writing results, otherwise the line number will be used.")
 parser.add_argument("--output_dir", type=str, default="results/us-wa/")
 parser.add_argument("--counties", type=str, default=None, help="Optional. If specified, only specified counties will be processed (comma-separated list).")
+parser.add_argument("--gcs_path", type=str, default=None)
+parser.add_argument("--study_params", type=str, default="../data/us-wa/simulations.csv", help="Optional. Parameter file with one set of overrides per line. If an extra column of \'study_name\" is used, will be used for writing results, otherwise the line number will be used.")
+parser.add_argument("--study_line", type=int, default=None, help="Optional. The line (0-indexed) of the study_params to run. Requires study_params to be specified. If omitted, all studies are run.")
 
 DEFAULT_ARGS = parser.parse_args([])
 
@@ -268,6 +271,7 @@ def sim_display(results, labels):
       sim_plot(axs, result, label, param_model['n_total'], param_model['time_offset'])
   axs[3].legend(bbox_to_anchor=(0, -0.2),loc='upper left',
                   title=label_prefix, ncol=math.ceil(len(results) / 12)).set_in_layout(False)
+  return fig
 
 def read_county_occupation_network( county_fips, all_occupations ):
   sector_df = all_occupations[all_occupations.area_fips == county_fips]
@@ -605,17 +609,23 @@ class AggregateModel(object):
     self.merged_results = [merged_params, merged_results]
     return self.merged_results
 
-  def plot_results(self):
+  def plot_results(self, output_dir=None):
     if not self.results:
       return
     if not self.merged_results:
       self.merge_results()
-    sim_display([self.merged_results], ["AggregateModel"])
+    fig = sim_display([self.merged_results], ["AggregateModel"])
+    if output_dir:
+      fig.savefig(os.path.join(output_dir, f"merged_results.png"))
+    return fig
 
-  def plot_county(self, county_fips):
+  def plot_county(self, county_fips, output_dir=None):
     if county_fips not in self.results:
       return
-    sim_display([result], [f"County {county_fips}"])
+    fig = sim_display([result], [f"County {county_fips}"])
+    if output_dir:
+      fig.savefig(os.path.join(output_dir, f"{county_fips}_results.png"))
+    return fig
 
   def write_results(self, output_dir, write_merged=True):
     if not self.results:
@@ -625,10 +635,9 @@ class AggregateModel(object):
     except FileExistsError:
       pass
 
-    for county, outputs in self.results.items():
-      pd.DataFrame(outputs[0][0], index=[0]).to_csv(os.path.join(output_dir, f"{county}_params.csv"), index=False)
-      for idx, output in enumerate(outputs):
-        output[1].to_csv(os.path.join(output_dir, f"{county}_{idx}_results.csv"), index=False)
+    for county, output in self.results.items():
+      pd.DataFrame(stringify(output[0]), index=[0]).to_csv(os.path.join(output_dir, f"{county}_params.csv"), index=False)
+      output[1].to_csv(os.path.join(output_dir, f"{county}_results.csv"), index=False)
 
     if not write_merged:
       return
@@ -653,10 +662,22 @@ def read_results(base_dir, sim_names=None):
   return results, sim_names
 
 
+def upload(d, gcs_path):
+  no_prefix = gcs_path[len('gs://'):]
+  splits = no_prefix.split('/')
+  bucket = splits[0]
+  save_path = '/'.join(splits[1:])
+
+  prefix = os.basename(d)
+  for f in os.listdir(path):
+    glob = storage.Blob(os.path.join(save_path, f"{prefix}_{f}"),
+                        storage_client.get_bucket(bucket))
+    with open(f, 'rb') as fh:
+      blob.upload_from_file(fh)
+
+
 def main(args):
   output_dir = args.output_dir
-  if args.counties:
-    counties = [int(c.strip()) for c in args.counties.split(',')]
 
   if args.study_params:
     overrides = pd.read_csv(args.study_params, comment="#")
@@ -664,19 +685,27 @@ def main(args):
       overrides["study_name"] = [f"{i}" for i in range(len(overrides))]
   else:
     overrides = pd.DataFrame({"study_name": ["0"]})
+
+  if args.study_line:
+    overrides = overrides.iloc[args.study_line:args.study_line+1]
+
   state_param_file = args.statewide_parameters
   households_file = args.household_demographics
   occupations_file = args.occupations
   county_params_file = args.county_parameters
 
   model = AggregateModel([state_param_file], households_file, occupations_file, county_params_file)
+  if args.counties:
+    counties = [int(c.strip()) for c in args.counties.split(',')]
+  else:
+    counties = model.counties
   for override in overrides.itertuples():
-    if counties:
-      model.run_counties(counties, override._asdict())
-    else:
-      model.run_all(override._asdict())
+    model.run_counties(counties, override._asdict())
     if output_dir:
-      model.write_results(os.path.join(output_dir, override.study_name))
+      study_path = os.path.join(output_dir, override.study_name)
+      model.write_results(study_path)
+      if args.gcs_path:
+        upload(study_path, FLAGS.gcs_path)
 
 if __name__ == "__main__":
   main(parser.parse_args())
