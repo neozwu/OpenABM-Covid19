@@ -9,7 +9,6 @@ import argparse
 import collections
 import csv
 import glob
-import example_utils as utils
 import itertools
 import math
 import pandas as pd
@@ -19,6 +18,9 @@ import sys
 import covid19
 from tqdm import tqdm, trange
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+
+from COVID19.model import Model, Parameters, ModelParameterException
+import COVID19.simulation as simulation
 
 
 def relative_path(filename: str) -> str:
@@ -97,6 +99,21 @@ WORK_INTERACTION_ADJUST_RATIO = {
   '99':  1.0, # Unclassified
 }
 
+input_parameter_file = relative_path("../tests/data/baseline_parameters.csv")
+parameter_line_number = 1
+output_dir = "."
+household_demographics_file = relative_path("../tests/data/baseline_household_demographics.csv")
+hospital_file = relative_path("../tests/data/hospital_baseline_parameters.csv")
+
+def get_baseline_parameters():
+    params = Parameters(input_parameter_file, parameter_line_number, output_dir, household_demographics_file, hospital_file)
+    return params
+
+def get_simulation( params ):
+    model = simulation.COVID19IBM(model = Model(params))
+    sim = simulation.Simulation(env = model, end_time = params.get_param( "end_time" ) )
+    return sim
+
 def cycle(l, n):
   return itertools.chain.from_iterable(itertools.repeat(l, n))
 
@@ -163,7 +180,7 @@ def setup_params(network, params_overrides={}):
   params_dict = LOCAL_DEFAULT_PARAMS.copy()
   params_dict.update(params_overrides)
 
-  params = utils.get_baseline_parameters()
+  params = get_baseline_parameters()
   for p, v in params_dict.items():
     if p in LOCAL_DEFAULT_PARAMS:
       continue
@@ -367,7 +384,7 @@ def build_occupation_assignment(household_df, network_df, network_pdf):
 
 def run_lockdown(network, params_dict):
   params, occupation_network = setup_params(network, params_dict)
-  model = utils.get_simulation( params ).env.model
+  model = get_simulation( params ).env.model
 
   total_days_left = int(params_dict['end_time'])
   m_out = []
@@ -407,7 +424,7 @@ def scale_lockdown(model, scalar, base_multipliers, scale_all=False):
 
 def run_baseline_forecast(network, params_dict):
   params, occupation_network = setup_params(network, params_dict)
-  model = utils.get_simulation( params ).env.model
+  model = get_simulation( params ).env.model
 
   if isinstance(params_dict["lockdown_scalars"], list):
     scalars = params_dict["lockdown_scalars"]
