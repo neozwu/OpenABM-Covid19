@@ -18,9 +18,11 @@ import sys
 import covid19
 from tqdm import tqdm, trange
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from google.cloud import storage
 
 from COVID19.model import Model, Parameters, ModelParameterException
 import COVID19.simulation as simulation
+
 
 
 def relative_path(filename: str) -> str:
@@ -685,8 +687,9 @@ def upload(d, gcs_path):
   bucket = splits[0]
   save_path = '/'.join(splits[1:])
 
-  prefix = os.basename(d)
-  for f in os.listdir(path):
+  prefix = os.path.basename(d)
+  storage_client = storage.Client()
+  for f in os.listdir(d):
     glob = storage.Blob(os.path.join(save_path, f"{prefix}_{f}"),
                         storage_client.get_bucket(bucket))
     with open(f, 'rb') as fh:
@@ -722,7 +725,7 @@ def main(args):
       study_path = os.path.join(output_dir, override.study_name)
       model.write_results(study_path)
       if args.gcs_path:
-        upload(study_path, FLAGS.gcs_path)
+        upload(study_path, args.gcs_path)
 
 if __name__ == "__main__":
   main(parser.parse_args())
