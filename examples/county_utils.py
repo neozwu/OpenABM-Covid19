@@ -690,7 +690,7 @@ def upload(d, gcs_path):
   prefix = os.path.basename(d)
   storage_client = storage.Client()
   for f in os.listdir(d):
-    glob = storage.Blob(os.path.join(save_path, f"{prefix}_{f}"),
+    blob = storage.Blob(os.path.join(save_path, f"{prefix}_{f}"),
                         storage_client.get_bucket(bucket))
     with open(os.path.join(d, f), 'rb') as fh:
       blob.upload_from_file(fh)
