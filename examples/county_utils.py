@@ -32,7 +32,7 @@ parser.add_argument("--occupations", type=str, default=relative_path("../data/us
 parser.add_argument("--output_dir", type=str, default="results/us-wa/")
 parser.add_argument("--counties", type=str, default=None, help="Optional. If specified, only specified counties will be processed (comma-separated list).")
 parser.add_argument("--gcs_path", type=str, default=None)
-parser.add_argument("--study_params", type=str, default="../data/us-wa/simulations.csv", help="Optional. Parameter file with one set of overrides per line. If an extra column of \'study_name\" is used, will be used for writing results, otherwise the line number will be used.")
+parser.add_argument("--study_params", type=str, default=relative_path("../data/us-wa/simulations.csv"), help="Optional. Parameter file with one set of overrides per line. If an extra column of \'study_name\" is used, will be used for writing results, otherwise the line number will be used.")
 parser.add_argument("--study_line", type=int, default=None, help="Optional. The line (0-indexed) of the study_params to run. Requires study_params to be specified. If omitted, all studies are run.")
 
 DEFAULT_ARGS = parser.parse_args([])
