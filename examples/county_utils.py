@@ -119,10 +119,11 @@ def get_simulation( params ):
 def cycle(l, n):
   return itertools.chain.from_iterable(itertools.repeat(l, n))
 
-def stringify(p):
+def stringify_dict(p):
   for k in p.keys():
     if isinstance(p[k], list):
       p[k] = ",".join([f"{v}" for v in p[k]])
+  return p
 
 def bucket_to_age(b):
   return int(b.split("_")[1]) // 10
@@ -655,7 +656,7 @@ class AggregateModel(object):
       pass
 
     for county, output in self.results.items():
-      pd.DataFrame(stringify(output[0]), index=[0]).to_csv(os.path.join(output_dir, f"{county}_params.csv"), index=False)
+      pd.DataFrame(stringify_dict(output[0]), index=[0]).to_csv(os.path.join(output_dir, f"{county}_params.csv"), index=False)
       output[1].to_csv(os.path.join(output_dir, f"{county}_results.csv"), index=False)
 
     if not write_merged:
@@ -663,19 +664,27 @@ class AggregateModel(object):
     if not self.merged_results:
       self.merge_results()
     params, result = self.merged_results
-    pd.DataFrame(stringify(params), index=[0]).to_csv(os.path.join(output_dir, f"merged_params.csv"), index=False)
+    pd.DataFrame(stringify_dict(params), index=[0]).to_csv(os.path.join(output_dir, f"merged_params.csv"), index=False)
     result.to_csv(os.path.join(output_dir, f"merged_results.csv"), index=False)
 
 
 def read_results(base_dir, sim_names=None):
+  study_params = None
+  model = None
   if sim_names is None:
-    paths = glob.glob(os.path.join(base_dir, "*/merged_results.csv"))
-    sim_names = [os.path.basename(os.path.dirname(path)) for path in paths]
+    paths = glob.glob(os.path.join(base_dir, "*_merged_results.csv"))
+    sim_names = [os.path.basename(path).replace("_merged_results.csv","") for path in paths]
 
   results = []
   for sim in sim_names:
-    params = pd.read_csv(os.path.join(base_dir, f"{sim}/merged_params.csv")).loc[0].to_dict()
-    result = pd.read_csv(os.path.join(base_dir, f"{sim}/merged_results.csv"))
+    try:
+      params = pd.read_csv(os.path.join(base_dir, f"{sim}_merged_params.csv")).loc[0].to_dict()
+    except:
+      if study_params is None:
+        study_params = pd.read_csv(DEFAULT_ARGS.study_params, comment="#", index_col="study_name")
+        model = AggregateModel()
+      params, _ = model.get_county_run(53033, study_params.loc[sim].to_dict())
+    result = pd.read_csv(os.path.join(base_dir, f"{sim}_merged_results.csv"))
     results.append([params, result])
 
   return results, sim_names
