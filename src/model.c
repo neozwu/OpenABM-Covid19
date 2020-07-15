@@ -241,7 +241,8 @@ void set_up_networks( model *model )
 	if( model->params->hospital_on )
 		set_up_hospital_networks( model );
 
-	model->mean_interactions = estimate_mean_interactions_by_age( model, -1 );
+	for( idx =0; idx < N_AGE_TYPES; idx++ )
+		model->mean_interactions[idx] = estimate_mean_interactions_by_age( model, idx );
 }
 
 /*****************************************************************************************
