@@ -57,7 +57,7 @@ def stringify(l):
   return ",".join((f"{x}" for x in l))
 
 params_baseline = {
-    "rng_seed" : 1,
+    "rng_seed" : 0,
     "app_turned_on" : 0,
     "n_seed_infection": 30,
     "custom_occupation_network": 1,
@@ -116,7 +116,7 @@ def main():
       p["study_name"] = f"{sim_name}_{idx}"
       p["iteration"] = idx
       sims.append(p)
-  pd.DataFrame(sims).to_csv("./results/simulations.csv",index=False)
+  pd.DataFrame(sims).to_csv("../data/us-wa/simulations.csv",index=False)
 
 if __name__ == "__main__":
   main()
