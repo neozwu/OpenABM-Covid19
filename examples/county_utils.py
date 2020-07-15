@@ -70,6 +70,7 @@ LOCAL_DEFAULT_PARAMS = {
     "mobility_scale_all": 0,
     "static_mobility_scalar": 0,
     "iteration": 0,
+    "mobility_start_date": "2020-03-01",
 }
 HOUSEHOLD_SIZES=[f"household_size_{i}" for i in  range(1,7)]
 AGE_BUCKETS=[f"{l}_{h}" for l, h in zip(range(0, 80, 10), range(9, 80, 10))] + ["80"]
@@ -269,10 +270,13 @@ def sim_plot(axs, df, label, n_total, time_offset):
   df['new_death'] = diff["n_death"]
   df["total_infected_rate"] = df["total_infected"] / n_total
   df["quarantine_rate"] = df["n_quarantine"] / n_total
-  df["time (days)"] = df["time"] - time_offset
+  if isinstance(time_offset, pd.Timestamp):
+    df["date"] = time_offset + df.time.apply(lambda t: pd.Timedelta(t - 1, unit="d"))
+  else:
+    df["date"] = df["time"] - time_offset
 
   if "iteration" in df.columns and df.iteration.max() > 0:
-    dgroup = df.groupby(["time (days)"])
+    dgroup = df.groupby(["date"])
     dlow = dgroup.quantile([0.05])
     dmed = dgroup.mean()
     dhigh = dgroup.quantile([0.95])
@@ -283,7 +287,7 @@ def sim_plot(axs, df, label, n_total, time_offset):
 
   else:
     for ax, y in zip(axs, ["new_infected", "total_infected", "total_infected_rate", "n_death", "n_hospital", "n_tests", "quarantine_rate"]):
-      df.plot( ax=ax, x = "time (days)", y = y, label=label, legend=False)
+      df.plot( ax=ax, x = "date", y = y, label=label, legend=False)
 
 def common_prefix(labels):
   psubstr = ""
@@ -314,8 +318,12 @@ def sim_display(results, labels):
     labels = [label[len(label_prefix):] for label in labels]
 
   for result, label in zip(results,labels):
-      param_model, result = result
-      sim_plot(axs, result, label, param_model['n_total'], param_model['time_offset'])
+      param_model, df = result
+      if "mobility_start_date" in param_model and "seeding_date_delta" in param_model:
+        time_offset = pd.Timestamp(param_model['mobility_start_date']) - pd.Timedelta(param_model['seeding_date_delta'], unit='d')
+      else:
+        time_offset = param_model['time_offset']
+      sim_plot(axs, df, label, param_model['n_total'], time_offset)
   axs[3].legend(bbox_to_anchor=(0, -0.2),loc='upper left',
                   title=label_prefix, ncol=math.ceil(len(results) / 12)).set_in_layout(False)
   return fig
@@ -656,15 +664,13 @@ class AggregateModel(object):
     fig = sim_display([self.merged_results], ["AggregateModel"])
     if output_dir:
       fig.savefig(os.path.join(output_dir, f"merged_results.png"))
-    return fig
 
   def plot_county(self, county_fips, output_dir=None):
     if county_fips not in self.results:
       return
-    fig = sim_display([result], [f"County {county_fips}"])
+    fig = sim_display([self.results[county_fips]], [f"County {county_fips}"])
     if output_dir:
       fig.savefig(os.path.join(output_dir, f"{county_fips}_results.png"))
-    return fig
 
   def write_results(self, output_dir, write_merged=True):
     if not self.results:
@@ -702,7 +708,7 @@ def read_results(base_dir, sim_names=None):
       if study_params is None:
         study_params = pd.read_csv(DEFAULT_ARGS.study_params, comment="#", index_col="study_name")
         model = AggregateModel()
-      params, _ = model.get_county_run(53033, study_params.loc[sim].to_dict())
+      params, _ = model.get_county_run(53033, study_params.iloc[sim].to_dict())
     result = pd.read_csv(os.path.join(base_dir, f"{sim}_merged_results.csv"))
     results.append([params, result])
 

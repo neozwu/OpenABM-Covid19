@@ -26,6 +26,10 @@ mobility_glm = [
     0.47197294, 0.42999616, 0.46053863, 0.4188922, 0.36068365
 ]
 
+mobility_glm_scalar = [i / mobility_glm[0] for i in mobility_glm]
+
+mobility_glm_scalar.append(pd.Series(mobility_glm_scalar).rolling(7,1).mean().to_list()[-1])
+
 changepoint_rate = [
     1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
     1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
@@ -43,6 +47,10 @@ changepoint_rate = [
     0.6693728, 0.6693728, 0.6693728, 0.6693728, 0.6693728, 0.6693728, 0.6693728,
     0.6693728, 0.6693728, 0.6693728, 0.6693728
 ]
+
+changepoint_rate_scalar = [i / changepoint_rate[0] for i in changepoint_rate]
+
+changepoint_rate.append(changepoint_rate[-1])
 
 params_simulation = {
     "end_time" : 400,
@@ -62,7 +70,7 @@ params_baseline = {
     "n_seed_infection": 30,
     "custom_occupation_network": 1,
     "infectious_rate": 6.5,
-    "lockdown_scalars": stringify(mobility_glm),
+    "lockdown_scalars": stringify(mobility_glm_scalar),
     "changepoint_scalars": stringify(changepoint_rate),
     "seeding_date_delta": 15,
     "mobility_scale_all": 0,
