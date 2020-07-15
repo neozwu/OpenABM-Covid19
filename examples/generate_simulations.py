@@ -44,50 +44,20 @@ changepoint_rate = [
     0.6693728, 0.6693728, 0.6693728, 0.6693728
 ]
 
-params_realistic = {
-    "rng_seed" : 1,
+params_simulation = {
     "end_time" : 400,
-    "allow_clinical_diagnosis": 1,
-    "self_quarantine_fraction" : 0.8, # self quarantine on symptoms
-    # If we consider an interaction as a "close contact", that is <6ft for >=15min,
-    # Most interactions should be caught by the system (in fact it's more likely to have FP than FN).
-    # FN rate was 0.08.
-    "traceable_interaction_fraction" : 0.92,
     "app_users_fraction": 0.6,
     "quarantine_on_traced": 1,
-     # No household quarantining, not recommended by CDC.
-     # https://www.cdc.gov/coronavirus/2019-ncov/php/principles-contact-tracing.html
-    "quarantine_household_on_symptoms": 0,
-    "quarantine_household_on_positive": 0,
-    "quarantine_household_on_traced_positive": 0,
-    "hospitalised_daily_interactions": 0,
-    "test_insensitive_period": 1,
-    "test_order_wait": 1,
-    "test_result_wait": 1,
     "retrace_on_positive": 1,
     "trace_on_positive": 1,
     "trace_on_symptoms": 0,
-    "test_on_symptoms": 1,
-    "test_on_traced": 0, # We quarantine, but don't test on traced (not CDC recommended)
-    "testing_symptoms_time_on": 0,
-    "intervention_start_time": 0,
-    # From https://gwhwi.org/estimator-613404.html
-    "manual_trace_on_hospitalization": 1,
-    "manual_trace_on_positive": 1,
-    "manual_trace_delay": 1,
-    "manual_traceable_fraction_household": 1,
-    "manual_traceable_fraction_occupation": 0.8,
-    "manual_traceable_fraction_random": 0.05,
-    "manual_trace_exclude_app_users": 0,
-    #"manual_trace_n_workers": 30,
-    "manual_trace_interviews_per_worker_day": 6,
-    "manual_trace_notifications_per_worker_day": 12,
 }
 
 def stringify(l):
   return ",".join((f"{x}" for x in l))
 
 params_baseline = {
+    "rng_seed" : 1,
     "app_turned_on" : 0,
     "n_seed_infection": 30,
     "custom_occupation_network": 1,
@@ -133,7 +103,7 @@ manual_tracing_nwork = [(f"en_{rate:0.2f}_man_trace_numwork_{nwork}", {
 
 def main():
   all_sweeps = list(itertools.chain(adoption_sweep, social_distancing, test_wait, manual_tracing_delay, manual_tracing_nwork))
-  bp = params_realistic
+  bp = params_simulation
   bp.update(params_baseline)
   
   sims = []
@@ -144,6 +114,7 @@ def main():
       if "rng_seed" in p:
         p["rng_seed"] += idx * 10
       p["study_name"] = f"{sim_name}_{idx}"
+      p["iteration"] = idx
       sims.append(p)
   pd.DataFrame(sims).to_csv("./results/simulations.csv",index=False)
 

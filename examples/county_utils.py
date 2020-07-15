@@ -28,6 +28,16 @@ import COVID19.simulation as simulation
 def relative_path(filename: str) -> str:
     return os.path.join(os.path.dirname(__file__), filename)
 
+def remove_nans(d):
+  d = d.copy()
+  for k in list(d.keys()):
+    try:
+      if np.isnan(d[k]):
+        del d[k]
+    except (TypeError, ValueError):
+      pass
+  return d
+
 parser = argparse.ArgumentParser(description="Run County Simluations.")
 parser.add_argument("--statewide_parameters", type=str, default=relative_path("../data/us-wa/wa_state_parameters_transpose.csv"), help="State-specific parameters file. Will overwite baseline values, but can be overwritten by individual county-level parameters. Reads as transpose file if 'transpose' is present in file name.")
 parser.add_argument("--county_parameters", type=str, default=relative_path("../data/us-wa/wa_county_parameters.csv"), help="County-specific parameters file(s). Will overwite baseline and state values. Expects an extra column of county_fips to designate which county this refers to.")
@@ -59,6 +69,7 @@ LOCAL_DEFAULT_PARAMS = {
     "changepoint_on": 0, # No effect yet. TODO(mattea): Implement once we have values for all counties
     "mobility_scale_all": 0,
     "static_mobility_scalar": 0,
+    "iteration": 0,
 }
 HOUSEHOLD_SIZES=[f"household_size_{i}" for i in  range(1,7)]
 AGE_BUCKETS=[f"{l}_{h}" for l, h in zip(range(0, 80, 10), range(9, 80, 10))] + ["80"]
@@ -106,6 +117,9 @@ parameter_line_number = 1
 output_dir = "."
 household_demographics_file = relative_path("../tests/data/baseline_household_demographics.csv")
 hospital_file = relative_path("../tests/data/hospital_baseline_parameters.csv")
+
+BASE_PARAMS = collections.defaultdict(str)
+BASE_PARAMS.update(remove_nans(pd.read_csv(input_parameter_file).loc[0].to_dict()))
 
 def get_baseline_parameters():
     params = Parameters(input_parameter_file, parameter_line_number, output_dir, household_demographics_file, hospital_file)
@@ -231,6 +245,19 @@ def build_population(params_dict, houses):
     if idx >= n_total:
       break
   return pd.DataFrame({'ID':IDs, 'age_group':ages, 'house_no':house_no})
+
+
+def diff_params(local_params, global_params={}):          
+  if isinstance(local_params, pd.DataFrame):                                                
+    local_params = local_params.loc[0].to_dict()
+  if isinstance(global_params, pd.DataFrame):
+    global_params = global_params.loc[0].to_dict()
+  for col in sorted(set(local_params.keys()).union(global_params.keys())):
+    g = global_params[col] if col in global_params else BASE_PARAMS[col]
+    l = local_params[col] if col in local_params else BASE_PARAMS[col]
+    if g != l:
+      print(f"{col} {g} {l}")
+
 
 def sim_plot(axs, df, label, n_total, time_offset):
   """Plot the simulation result to the given axes"""
@@ -522,16 +549,6 @@ def run_counties(county_params, all_households, all_occupations, params_files=[]
     outputs.append(run_model(params, households, sector_names, sector_pdf))
   return outputs
 
-def remove_nans(d):
-  d = d.copy()
-  for k in list(d.keys()):
-    try:
-      if np.isnan(d[k]):
-        del d[k]
-    except (TypeError, ValueError):
-      pass
-  return d
-
 class Network(object):
   def __init__(self, households, sector_names, sector_pdf):
     self.households = households
@@ -608,7 +625,9 @@ class AggregateModel(object):
 
     results = collections.defaultdict(list)
     for county_fips, output in zip(cycle(counties_fips, n_iterations), outputs):
-      output[1]["iteration"] = len(results[county_fips])
+      output[1]["iteration"] = (output[0]["iteration"]
+                                if self.n_iterations == 1
+                                else len(results[county_fips]))
       results[county_fips].append(output)
     for county_fips, all_results in results.items():
       df = pd.concat([result for _, result in all_results])
