@@ -71,7 +71,7 @@ params_baseline = {
     "custom_occupation_network": 1,
     "infectious_rate": 6.5,
     "lockdown_scalars": stringify(mobility_glm_scalar),
-    "changepoint_scalars": stringify(changepoint_rate),
+    "changepoint_scalars": stringify(changepoint_rate_scalar),
     "seeding_date_delta": 15,
     "mobility_scale_all": 0,
     "static_mobility_scalar": 0,

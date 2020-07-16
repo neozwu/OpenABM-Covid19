@@ -438,7 +438,7 @@ def run_lockdown(network, params_dict):
 
   model.update_running_params("lockdown_on", 1)
           
-  for step in range(total_days_left):
+  for step in trange(total_days_left):
     if step == params_dict['lockdown_days']:
       model.update_running_params("lockdown_on", 0)
       if params_dict["app_turned_on"]:
@@ -501,32 +501,36 @@ def run_baseline_forecast(network, params_dict):
   seeding_date_delta = params_dict["seeding_date_delta"]
   baseline_days = len(scalars) + seeding_date_delta
   params_dict["time_offset"] = baseline_days
+  end_time = max(params_dict["end_time"], baseline_days)
+  with tqdm(total=end_time) as pbar:
+    for step in range(seeding_date_delta):
+      model.one_time_step()
+      m_out.append(model.one_time_step_results())
+      pbar.update()
 
-  for step in range(seeding_date_delta):
-    model.one_time_step()
-    m_out.append(model.one_time_step_results())
+    model.update_running_params("lockdown_on", 1)
 
-  model.update_running_params("lockdown_on", 1)
+    for step in range(len(scalars)):
+      scale_lockdown(model, scalars[step], base_multipliers, scale_all)
+      # Scale random network too.
+      model.update_running_params('lockdown_random_network_multiplier', scalars[step] * base_random)
 
-  for step in range(len(scalars)):
-    scale_lockdown(model, scalars[step], base_multipliers, scale_all)
-    # Scale random network too.
-    model.update_running_params('lockdown_random_network_multiplier', scalars[step] * base_random)
+      model.update_running_params('relative_transmission_random', changepoints[step] * base_rel_trans_rand)
+      model.update_running_params('relative_transmission_occupation', changepoints[step] * base_rel_trans_occ)
 
-    model.update_running_params('relative_transmission_random', changepoints[step] * base_rel_trans_rand)
-    model.update_running_params('relative_transmission_occupation', changepoints[step] * base_rel_trans_occ)
+      model.one_time_step()
+      m_out.append(model.one_time_step_results())
+      pbar.update()
 
-    model.one_time_step()
-    m_out.append(model.one_time_step_results())
-
-  if params_dict["app_turned_on"]:
-    model.update_running_params("app_turned_on", 1)
-  if params_dict["manual_tracing_on"]:
-    model.update_running_params("manual_tracing_on", 1)
-          
-  for step in range(params_dict["end_time"] - baseline_days):
-    model.one_time_step()
-    m_out.append(model.one_time_step_results())
+    if params_dict["app_turned_on"]:
+      model.update_running_params("app_turned_on", 1)
+    if params_dict["manual_tracing_on"]:
+      model.update_running_params("manual_tracing_on", 1)
+            
+    for step in range(end_time - baseline_days):
+      model.one_time_step()
+      m_out.append(model.one_time_step_results())
+      pbar.update()
 
   del model
   return m_out
@@ -743,7 +747,7 @@ def main(args):
   else:
     overrides = pd.DataFrame({"study_name": ["0"]})
 
-  if args.study_line:
+  if args.study_line is not None:
     overrides = overrides.iloc[args.study_line:args.study_line+1]
 
   state_param_file = args.statewide_parameters
