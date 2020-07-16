@@ -50,7 +50,7 @@ changepoint_rate = [
 
 changepoint_rate_scalar = [i / changepoint_rate[0] for i in changepoint_rate]
 
-changepoint_rate.append(changepoint_rate[-1])
+changepoint_rate_scalar.append(changepoint_rate_scalar[-1])
 
 params_simulation = {
     "end_time" : 400,

@@ -474,6 +474,9 @@ def run_baseline_forecast(network, params_dict):
   else:
     changepoints = [float(x) for x in params_dict["changepoint_scalars"].split(",")]
 
+  if len(scalars) != len(changepoints):
+    raise ValueError(f"Scalar length mismatch {len(scalars)} vs {len(changepoints)}")
+
   if occupation_network is not None:
     base_multipliers = occupation_network.lockdown_multiplier.copy()
   else:
@@ -708,7 +711,7 @@ def read_results(base_dir, sim_names=None):
       if study_params is None:
         study_params = pd.read_csv(DEFAULT_ARGS.study_params, comment="#", index_col="study_name")
         model = AggregateModel()
-      params, _ = model.get_county_run(53033, study_params.iloc[sim].to_dict())
+      params, _ = model.get_county_run(53033, study_params.loc[sim].to_dict())
     result = pd.read_csv(os.path.join(base_dir, f"{sim}_merged_results.csv"))
     results.append([params, result])
 
