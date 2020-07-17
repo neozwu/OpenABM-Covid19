@@ -53,7 +53,7 @@ changepoint_rate_scalar = [i / changepoint_rate[0] for i in changepoint_rate]
 changepoint_rate_scalar.append(changepoint_rate_scalar[-1])
 
 params_simulation = {
-    "end_time" : 400,
+    "end_time" : 300,
     "app_users_fraction": 0.6,
     "quarantine_on_traced": 1,
     "retrace_on_positive": 1,
@@ -77,37 +77,37 @@ params_baseline = {
     "static_mobility_scalar": 0,
 }
 
-adoption_sweep = [(f"en_{rate:0.2f}", {
+adoption_sweep = [(f"en_{rate:0.1f}", {
     "app_turned_on": 1,
     "app_users_fraction": rate,
 }) for rate in [0,0.2,0.4,0.6,0.8,1]]
 
-social_distancing = [(f"en_{rate:0.2f}_social_dist_{dist:0.2f}", {
+social_distancing = [(f"en_{rate:0.1f}_social_dist_{dist:0.1f}", {
     "app_turned_on": 1,
     "app_users_fraction": rate,
-    "relative_transmission_occupation": dist,
-    "relative_transmission_random": dist,
+    "relative_transmission_social_distancing": dist,
 }) for rate, dist in itertools.product([0,0.2,0.4,0.6,0.8,1], [0.4,0.6,0.8,1])]
 
-test_wait = [(f"en_{rate:0.2f}_test_delay_{delay}", {
+test_wait = [(f"en_{rate:0.1f}_test_delay_{delay}", {
     "app_turned_on": 1,
     "app_users_fraction": rate,
     "test_result_wait": delay,
 }) for rate, delay in itertools.product([0,0.2,0.4,0.6,0.8,1], [0,1,2,4,6,8,10])]
 
-manual_tracing_delay = [(f"en_{rate:0.2f}_man_trace_delay_{delay}", {
+manual_tracing_delay = [(f"en_{rate:0.1f}_man_trace_delay_{delay}", {
     "app_turned_on": 1,
     "manual_trace_on": 1,
     "app_users_fraction": rate,
     "manual_trace_delay": delay,
 }) for rate, delay in itertools.product([0,0.2,0.4,0.6,0.8,1], [0,1,2,4])]
 
-manual_tracing_nwork = [(f"en_{rate:0.2f}_man_trace_numwork_{nwork}", {
+manual_tracing_nwork = [(f"en_{rate:0.1f}_man_trace_numwork_{nwork}", {
     "app_turned_on": 1,
     "manual_trace_on": 1,
     "app_users_fraction": rate,
-    "manual_trace_n_workers": nwork,
-}) for rate, nwork in itertools.product([0,0.2,0.4,0.6,0.8,1], [1371,1500,2285,1000000])]
+    "manual_trace_n_workers_per_100k": nwork,
+}) for rate, nwork in itertools.product([0,0.2,0.4,0.6,0.8,1], [8.3, 15, 30, 100])]
+#Totals for WA State are 1371,1500,2285,1000000
 
 def main():
   all_sweeps = list(itertools.chain(adoption_sweep, social_distancing, test_wait, manual_tracing_delay, manual_tracing_nwork))

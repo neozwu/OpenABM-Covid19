@@ -55,7 +55,8 @@ LOCAL_DEFAULT_PARAMS = {
     "county_fips": "00000",
     "lockdown_days": 35,
     "app_turned_on": 0,
-    "manual_tracing_on": 0,
+    "manual_trace_on": 0,
+    "manual_trace_n_workers_per_100k": None,
     "app_users_fraction": 0.8,
     "custom_occupation_network": 1,
     "use_default_lockdown_multiplier": True,
@@ -71,6 +72,7 @@ LOCAL_DEFAULT_PARAMS = {
     "static_mobility_scalar": 0,
     "iteration": 0,
     "mobility_start_date": "2020-03-01",
+    "relative_transmission_social_distancing": None,
 }
 HOUSEHOLD_SIZES=[f"household_size_{i}" for i in  range(1,7)]
 AGE_BUCKETS=[f"{l}_{h}" for l, h in zip(range(0, 80, 10), range(9, 80, 10))] + ["80"]
@@ -209,6 +211,12 @@ def setup_params(network, params_overrides={}):
 
   if "app_users_fraction" in params_dict:
     set_app_users_fraction(params, params_dict["app_users_fraction"])
+
+  if params_dict["manual_trace_n_workers_per_100k"] is not None:
+    params.set_param(
+        "manual_trace_n_workers",
+        int(params_dict["manual_trace_n_workers_per_100k"] / 100000 *
+            params_dict["n_total"]))
   
   if "rng_seed" in params_dict:
     np.random.seed(int(params_dict["rng_seed"]))
@@ -443,8 +451,8 @@ def run_lockdown(network, params_dict):
       model.update_running_params("lockdown_on", 0)
       if params_dict["app_turned_on"]:
         model.update_running_params("app_turned_on", 1)
-      if params_dict["manual_tracing_on"]:
-        model.update_running_params("manual_tracing_on", 1)
+      if params_dict["manual_trace_on"]:
+        model.update_running_params("manual_trace_on", 1)
         
     model.one_time_step()
     m_out.append(model.one_time_step_results())
@@ -524,8 +532,11 @@ def run_baseline_forecast(network, params_dict):
 
     if params_dict["app_turned_on"]:
       model.update_running_params("app_turned_on", 1)
-    if params_dict["manual_tracing_on"]:
-      model.update_running_params("manual_tracing_on", 1)
+    if params_dict["manual_trace_on"]:
+      model.update_running_params("manual_trace_on", 1)
+    if params_dict["relative_transmission_social_distancing"]:
+      model.update_running_params('relative_transmission_random', params_dict["relative_transmission_social_distancing"])
+      model.update_running_params('relative_transmission_occupation', params_dict["relative_transmission_social_distancing"])
             
     for step in range(end_time - baseline_days):
       model.one_time_step()
