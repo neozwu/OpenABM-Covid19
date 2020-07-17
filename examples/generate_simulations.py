@@ -85,13 +85,14 @@ adoption_sweep = [(f"en_{rate:0.1f}", {
 social_distancing = [(f"en_{rate:0.1f}_social_dist_{dist:0.1f}", {
     "app_turned_on": 1,
     "app_users_fraction": rate,
-    "relative_transmission_social_distancing": dist,
+    "predicted_relative_transmission_occupation": dist,
+    "predicted_relative_transmission_random": dist,
 }) for rate, dist in itertools.product([0,0.2,0.4,0.6,0.8,1], [0.4,0.6,0.8,1])]
 
 test_wait = [(f"en_{rate:0.1f}_test_delay_{delay}", {
     "app_turned_on": 1,
     "app_users_fraction": rate,
-    "test_result_wait": delay,
+    "predicted_test_result_wait": delay,
 }) for rate, delay in itertools.product([0,0.2,0.4,0.6,0.8,1], [0,1,2,4,6,8,10])]
 
 manual_tracing_delay = [(f"en_{rate:0.1f}_man_trace_delay_{delay}", {

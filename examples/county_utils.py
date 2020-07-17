@@ -72,7 +72,6 @@ LOCAL_DEFAULT_PARAMS = {
     "static_mobility_scalar": 0,
     "iteration": 0,
     "mobility_start_date": "2020-03-01",
-    "relative_transmission_social_distancing": None,
 }
 HOUSEHOLD_SIZES=[f"household_size_{i}" for i in  range(1,7)]
 AGE_BUCKETS=[f"{l}_{h}" for l, h in zip(range(0, 80, 10), range(9, 80, 10))] + ["80"]
@@ -202,7 +201,7 @@ def setup_params(network, params_overrides={}):
 
   params = get_baseline_parameters()
   for p, v in params_dict.items():
-    if p in LOCAL_DEFAULT_PARAMS:
+    if p in LOCAL_DEFAULT_PARAMS or p.startswith("predicted_"):
       continue
     if isinstance(v, np.int64) or (hasattr(v, "is_integer") and v.is_integer()):
       params.set_param( p, int(v) )
@@ -534,9 +533,10 @@ def run_baseline_forecast(network, params_dict):
       model.update_running_params("app_turned_on", 1)
     if params_dict["manual_trace_on"]:
       model.update_running_params("manual_trace_on", 1)
-    if params_dict["relative_transmission_social_distancing"]:
-      model.update_running_params('relative_transmission_random', params_dict["relative_transmission_social_distancing"])
-      model.update_running_params('relative_transmission_occupation', params_dict["relative_transmission_social_distancing"])
+    for p, v in params_dict.items():
+      if not p.startswith("predicted_"):
+        continue
+      model.update_running_params(p.replace("predicted_",""), v)
             
     for step in range(end_time - baseline_days):
       model.one_time_step()
