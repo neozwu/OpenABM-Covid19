@@ -612,14 +612,14 @@ class AggregateModel(object):
   def run_county(self, county_fips, params_overrides={}):
     sector_names, sector_pdf = read_county_occupation_network(county_fips, self.occupations)
     households = self.households[self.households["county_fips"] == county_fips]
-    params = self.county_params.loc[county_fips].to_dict()
+    params = remove_nans(self.county_params.loc[county_fips].to_dict())
     params.update(params_overrides)
     return run_model(params, households, sector_names, sector_pdf)
 
   def get_county_run(self, county_fips, params_overrides={}):
     sector_names, sector_pdf = read_county_occupation_network(county_fips, self.occupations)
     households = self.households[self.households["county_fips"] == county_fips]
-    params = self.county_params.loc[county_fips].to_dict()
+    params = remove_nans(self.county_params.loc[county_fips].to_dict())
     params.update(params_overrides)
     return params, Network(households, sector_names, sector_pdf)
 

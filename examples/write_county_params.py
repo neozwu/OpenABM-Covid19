@@ -81,13 +81,14 @@ def household_sizes(households_file):
   households = pd.read_csv(households_file, skipinitialspace=True, comment="#")
   pops = households.groupby("county_fips").sum()
   pops = pops.rename(columns=lambda l: l.replace("a_","population_"))
-  pops["n_total"] = pops.sum(axis=1)
 
   house_sizes = households.set_index("county_fips").sum(axis=1).apply(lambda x: x if x <= 6 else 6)
   houses_df = pd.DataFrame(house_sizes, columns=["sizes"])
   houses_df["ones"] = 1
   house_counts = houses_df.pivot_table(index=houses_df.index,columns="sizes",aggfunc='count')['ones'].rename(columns=lambda l:f"household_size_{l}")
   house_counts.columns.name = None
+  house_counts.drop('household_size_0', axis=1, inplace=True)
+  house_counts["n_total"] = house_counts.sum(axis=1)
   return pops.join(house_counts)
 
 def main(args):
