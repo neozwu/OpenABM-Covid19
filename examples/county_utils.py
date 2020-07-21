@@ -515,7 +515,7 @@ def run_baseline_forecast(network, params_dict):
   seeding_date_delta = int(params_dict["seeding_date_delta"])
   baseline_days = len(scalars) + seeding_date_delta
   params_dict["time_offset"] = baseline_days
-  end_time = max(params_dict["end_time"], baseline_days)
+  end_time = max(int(params_dict["end_time"]), baseline_days)
   with tqdm(total=end_time) as pbar:
     for step in range(seeding_date_delta):
       model.one_time_step()
