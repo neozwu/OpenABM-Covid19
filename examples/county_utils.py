@@ -512,7 +512,7 @@ def run_baseline_forecast(network, params_dict):
   base_rel_trans_occ = params.get_param("relative_transmission_occupation")
 
   m_out = []
-  seeding_date_delta = params_dict["seeding_date_delta"]
+  seeding_date_delta = int(params_dict["seeding_date_delta"])
   baseline_days = len(scalars) + seeding_date_delta
   params_dict["time_offset"] = baseline_days
   end_time = max(params_dict["end_time"], baseline_days)
