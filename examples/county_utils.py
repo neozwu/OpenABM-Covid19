@@ -10,6 +10,7 @@ import collections
 import csv
 import glob
 import itertools
+import json
 import math
 import pandas as pd
 import numpy as np
@@ -48,6 +49,7 @@ parser.add_argument("--counties", type=str, default=None, help="Optional. If spe
 parser.add_argument("--gcs_path", type=str, default=None)
 parser.add_argument("--study_params", type=str, default=relative_path("../data/us-wa/simulations.csv"), help="Optional. Parameter file with one set of overrides per line. If an extra column of \'study_name\" is used, will be used for writing results, otherwise the line number will be used.")
 parser.add_argument("--study_line", type=int, default=None, help="Optional. The line (0-indexed) of the study_params to run. Requires study_params to be specified. If omitted, all studies are run.")
+parser.add_argument("--extra_params", type=json.loads, default="{}", help="Optional. Json of extra params.")
 
 DEFAULT_ARGS = parser.parse_args([])
 
@@ -772,7 +774,9 @@ def main(args):
   else:
     counties = model.counties
   for override in overrides.itertuples():
-    model.run_counties(counties, override._asdict())
+    params = override._asdict()
+    params.update(args.extra_params)
+    model.run_counties(counties, params)
     if output_dir:
       study_path = os.path.join(output_dir, override.study_name)
       model.write_results(study_path)
