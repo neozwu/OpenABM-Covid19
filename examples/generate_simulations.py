@@ -106,8 +106,9 @@ manual_tracing_nwork = [(f"en_{rate:0.1f}_man_trace_numwork_{nwork}", {
     "app_turned_on": 1,
     "manual_trace_on": 1,
     "app_users_fraction": rate,
-    "manual_trace_n_workers_per_100k": nwork,
-}) for rate, nwork in itertools.product([0,0.2,0.4,0.6,0.8,1], [4.7, 8.3, 15, 30, 100])]
+    "manual_trace_n_workers": nwork,
+#}) for rate, nwork in itertools.product([0,0.2,0.4,0.6,0.8,1], [4.7, 8.3, 15, 30, 100])]
+}) for rate, nwork in itertools.product([0,0.2,0.4,0.6,0.8,1], [0, 22, 49, 405, 810])]
 #Totals for WA State are 1371,1500,2285,1000000
 
 def main():
