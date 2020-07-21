@@ -1,5 +1,5 @@
 parameter_name,parameter_value
-rng_seed,1
+rng_seed,0
 param_id,1
 n_total,7615000
 manual_trace_n_workers,1371
@@ -12,7 +12,7 @@ app_users_fraction_50_59,0.79
 app_users_fraction_60_69,0.66
 app_users_fraction_70_79,0.53
 app_users_fraction_80,0.53
-end_time,250
+end_time,300
 lockdown_occupation_multiplier_elderly_network,0.5
 lockdown_occupation_multiplier_primary_network,0.05
 lockdown_occupation_multiplier_retired_network,0.5
@@ -26,5 +26,11 @@ quarantine_on_traced,1
 self_quarantine_fraction,0.8
 test_on_symptoms,1
 testing_symptoms_time_on,0
+trace_on_symptoms,0
 trace_on_positive,1
+retrace_on_positive,1
 traceable_interaction_fraction,0.92
+custom_occupation_network,1
+mobility_scale_all,0
+static_mobility_scalar,0
+app_users_fraction,0.6

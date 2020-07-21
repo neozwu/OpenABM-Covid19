@@ -173,11 +173,16 @@ def set_unset(d, k, v):
   if k not in d:
     d[k] = v
 
-def print_params(params):
+def print_c_params(params):
   for k in dir(params.c_params):
     if k.startswith("_"):
       continue
     print(f"{k}: {getattr(test_params.c_params, k)}")
+
+def print_county_params(county_fips, params_file=DEFAULT_ARGS.county_parameters):
+  county_params = pd.read_csv(params_file, index_col="county_fips", skipinitialspace=True, comment="#")
+  for k, v in county_params.loc[county_fips].to_dict().items():
+    print(f"{k}\t{v}")
 
 def county_params_from_state(state_params, county_params):
   """
