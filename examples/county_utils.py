@@ -588,7 +588,7 @@ class Network(object):
 
 class AggregateModel(object):
   def __init__(self,
-               param_files=[DEFAULT_ARGS.statewide_parameters],
+               param_files=[input_parameter_file, DEFAULT_ARGS.statewide_parameters],
                households_file=DEFAULT_ARGS.household_demographics,
                occupations_file=DEFAULT_ARGS.occupations,
                county_params_file=DEFAULT_ARGS.county_parameters,
