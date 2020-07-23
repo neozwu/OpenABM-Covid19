@@ -1,7 +1,5 @@
 # Lint as: python3
-"""TODO(mattea): DO NOT SUBMIT without one-line documentation for write_county_params.
-
-TODO(mattea): DO NOT SUBMIT without a detailed description of write_county_params.
+"""Write county-specific parameters to county param file.
 """
 
 import argparse
@@ -13,7 +11,7 @@ import pandas as pd
 def relative_path(filename: str) -> str:
     return os.path.join(os.path.dirname(__file__), filename)
 
-parser = argparse.ArgumentParser(description="Run County Simluations.")
+parser = argparse.ArgumentParser(description="Generate county-specific parameters.")
 parser.add_argument("--households_file", type=str, default=relative_path("../data/us-wa/wa_county_household_demographics.csv"))
 parser.add_argument("--output_file", type=str, default=relative_path("../data/us-wa/wa_county_parameters.csv"))
 
@@ -100,6 +98,7 @@ def household_sizes(households_file):
   households = pd.read_csv(households_file, skipinitialspace=True, comment="#")
   pops = households.groupby("county_fips").sum()
   pops = pops.rename(columns=lambda l: l.replace("a_","population_"))
+  pops["n_total"] = pops.sum(axis=1)
 
   house_sizes = households.set_index("county_fips").sum(axis=1).apply(lambda x: x if x <= 6 else 6)
   houses_df = pd.DataFrame(house_sizes, columns=["sizes"])
@@ -107,7 +106,6 @@ def household_sizes(households_file):
   house_counts = houses_df.pivot_table(index=houses_df.index,columns="sizes",aggfunc='count')['ones'].rename(columns=lambda l:f"household_size_{l}")
   house_counts.columns.name = None
   house_counts.drop('household_size_0', axis=1, inplace=True)
-  house_counts["n_total"] = house_counts.sum(axis=1)
   return pops.join(house_counts)
 
 def main(args):
