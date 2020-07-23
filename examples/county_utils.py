@@ -51,6 +51,8 @@ parser.add_argument("--study_params", type=str, default=relative_path("../data/u
 parser.add_argument("--study_line", type=int, default=None, help="The line (0-indexed) of the study_params to run. Must be set if and only if study_params is specified.")
 parser.add_argument("--extra_params", type=json.loads, default="{}", help="Optional. Json of extra params.")
 
+input_parameter_file = relative_path("../tests/data/baseline_parameters.csv")
+
 DEFAULT_ARGS = parser.parse_args([])
 
 LOCAL_DEFAULT_PARAMS = {
@@ -116,17 +118,10 @@ WORK_INTERACTION_ADJUST_RATIO = {
   '99':  1.0, # Unclassified
 }
 
-input_parameter_file = relative_path("../tests/data/baseline_parameters.csv")
-parameter_line_number = 1
-output_dir = "."
-household_demographics_file = relative_path("../tests/data/baseline_household_demographics.csv")
-hospital_file = relative_path("../tests/data/hospital_baseline_parameters.csv")
-
-BASE_PARAMS = collections.defaultdict(str)
-BASE_PARAMS.update(remove_nans(pd.read_csv(input_parameter_file).loc[0].to_dict()))
-
 def get_baseline_parameters():
-    params = Parameters(input_parameter_file, parameter_line_number, output_dir, household_demographics_file, hospital_file)
+    # We create our own households, so we pass a dummy set here.
+    dummy_house_df = pd.DataFrame({f"{i}" : [1] for i in range(9)})
+    params = Parameters(input_households=dummy_house_df, read_param_file=False)
     return params
 
 def get_simulation( params ):
@@ -155,12 +150,12 @@ def set_app_users_fraction(params, frac):
 def read_param_file(file_name):
   params = {}
   pf = pd.read_csv(file_name,skipinitialspace=True, comment="#")
-  if "transpose" in file_name:
+  if "parameter_name" in pf.columns:
     for row in pf.itertuples():
       params[row.parameter_name] = row.parameter_value
   else:
-    for row in pf.itertuples():
-      params.update(row.as_dict())
+    for row in pf.to_dict(orient='records'):
+      params.update(row)
   return params
 
 def read_param_files(file_names):
@@ -262,14 +257,17 @@ def build_population(params_dict, houses):
   return pd.DataFrame({'ID':IDs, 'age_group':ages, 'house_no':house_no})
 
 
-def diff_params(local_params, global_params={}):          
-  if isinstance(local_params, pd.DataFrame):                                                
+
+def diff_params(local_params, global_params={}):
+  base_params = collections.defaultdict(str)
+  base_params.update(remove_nans(pd.read_csv(input_parameter_file).loc[0].to_dict()))
+  if isinstance(local_params, pd.DataFrame):
     local_params = local_params.loc[0].to_dict()
   if isinstance(global_params, pd.DataFrame):
     global_params = global_params.loc[0].to_dict()
   for col in sorted(set(local_params.keys()).union(global_params.keys())):
-    g = global_params[col] if col in global_params else BASE_PARAMS[col]
-    l = local_params[col] if col in local_params else BASE_PARAMS[col]
+    g = global_params[col] if col in global_params else base_params[col]
+    l = local_params[col] if col in local_params else base_params[col]
     if g != l:
       print(f"{col} {g} {l}")
 
@@ -771,7 +769,7 @@ def main(args):
   occupations_file = args.occupations
   county_params_file = args.county_parameters
 
-  model = AggregateModel([state_param_file], households_file, occupations_file, county_params_file)
+  model = AggregateModel([input_parameter_file, state_param_file], households_file, occupations_file, county_params_file)
   if args.counties:
     counties = [int(c.strip()) for c in args.counties.split(',')]
   else:
