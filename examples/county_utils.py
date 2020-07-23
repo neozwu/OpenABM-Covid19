@@ -48,7 +48,7 @@ parser.add_argument("--output_dir", type=str, default="results/us-wa/")
 parser.add_argument("--counties", type=str, default=None, help="Optional. If specified, only specified counties will be processed (comma-separated list).")
 parser.add_argument("--gcs_path", type=str, default=None)
 parser.add_argument("--study_params", type=str, default=relative_path("../data/us-wa/simulations.csv"), help="Optional. Parameter file with one set of overrides per line. If an extra column of \'study_name\" is used, will be used for writing results, otherwise the line number will be used.")
-parser.add_argument("--study_line", type=int, default=None, help="Optional. The line (0-indexed) of the study_params to run. Requires study_params to be specified. If omitted, all studies are run.")
+parser.add_argument("--study_line", type=int, default=None, help="The line (0-indexed) of the study_params to run. Must be set if and only if study_params is specified.")
 parser.add_argument("--extra_params", type=json.loads, default="{}", help="Optional. Json of extra params.")
 
 DEFAULT_ARGS = parser.parse_args([])
@@ -758,15 +758,13 @@ def upload(d, gcs_path):
 def main(args):
   output_dir = args.output_dir
 
-  if args.study_params:
+  if args.study_params and args.study_line is not None:
     overrides = pd.read_csv(args.study_params, comment="#")
     if "study_name" not in overrides:
       overrides["study_name"] = [f"{i}" for i in range(len(overrides))]
+    overrides = overrides.iloc[args.study_line:args.study_line+1]
   else:
     overrides = pd.DataFrame({"study_name": ["0"]})
-
-  if args.study_line is not None:
-    overrides = overrides.iloc[args.study_line:args.study_line+1]
 
   state_param_file = args.statewide_parameters
   households_file = args.household_demographics
