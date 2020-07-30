@@ -28,9 +28,11 @@ struct event_list{
 	event **events;
 	long *n_daily;
 	long **n_daily_by_age;
+    long **n_daily_by_occupation;
 	long *n_daily_current;
 	long n_total;
 	long *n_total_by_age;
+    long *n_total_by_occupation;
 	long n_current;
 	double **infectious_curve;
 };

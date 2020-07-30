@@ -627,6 +627,24 @@ class Model:
                     ]
                 ]
             )
+
+        for network_id in range(self.c_model.n_occupation_networks):
+            key = f"total_infected_network_{covid19.utils_occupation_name(self.c_model, network_id)}"
+            results[key] = sum(
+                [
+                    covid19.utils_n_total_occupation(self.c_model, ty, network_id)
+                    for ty in [
+                    covid19.PRESYMPTOMATIC,
+                    covid19.PRESYMPTOMATIC_MILD,
+                    covid19.ASYMPTOMATIC,
+                ]
+                ]
+            )
+
+        for network_id in range(self.c_model.n_occupation_networks):
+            key = f"size_network_{covid19.utils_occupation_name(self.c_model, network_id)}"
+            results[key] = covid19.utils_occupation_size(self.c_model,network_id)
+
         results["total_case"] = covid19.utils_n_total(self.c_model, covid19.CASE)
         for age in AgeGroupEnum:
             key = f"total_case{age.name}"

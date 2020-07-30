@@ -157,7 +157,7 @@ void destroy_model( model *model )
 void set_up_event_list( model *model, parameters *params, int type )
 {
 
-	int day, age, idx;
+	int day, age, network, idx;
 	event_list *list = &(model->event_lists[ type ]);
 	list->type       = type;
 
@@ -166,6 +166,8 @@ void set_up_event_list( model *model, parameters *params, int type )
 	list->infectious_curve = calloc( N_INTERACTION_TYPES, sizeof(double*) );
 	list->n_total_by_age   = calloc( N_AGE_GROUPS, sizeof(long) );
 	list->n_daily_by_age   = calloc( MAX_TIME, sizeof(long*) );
+    list->n_total_by_occupation   = calloc( model->n_occupation_networks, sizeof(long) );
+    list->n_daily_by_occupation   = calloc( MAX_TIME, sizeof(long*) );
 	list->events		   = calloc( MAX_TIME, sizeof(event*));
 
 	list->n_current = 0;
@@ -175,6 +177,10 @@ void set_up_event_list( model *model, parameters *params, int type )
 		list->n_daily_by_age[day] = calloc( N_AGE_GROUPS, sizeof(long) );
 		for( age = 0; age < N_AGE_GROUPS; age++ )
 			list->n_daily_by_age[day][age] = 0;
+
+        list->n_daily_by_occupation[day] = calloc( model->n_occupation_networks, sizeof(long) );
+        for ( network = 0; network < model->n_occupation_networks; network++ )
+            list->n_daily_by_occupation[day][network] = 0;
 
 		list->n_daily[day] = 0;
 		list->n_daily_current[day] = 0;
@@ -193,7 +199,10 @@ void destroy_event_list( model *model, int type )
 	free( model->event_lists[type].n_daily );
 
 	for( day = 0; day < MAX_TIME; day++ )
-		free( model->event_lists[type].n_daily_by_age[day]);
+    {
+        free( model->event_lists[type].n_daily_by_age[day]);
+        free( model->event_lists[type].n_daily_by_occupation[day]);
+    }
 	for( idx = 0; idx < N_INTERACTION_TYPES; idx++ )
 		free( model->event_lists[type].infectious_curve[idx] );
 
@@ -201,6 +210,8 @@ void destroy_event_list( model *model, int type )
 	free( model->event_lists[type].infectious_curve );
 	free( model->event_lists[type].n_total_by_age );
 	free( model->event_lists[type].n_daily_by_age );
+    free( model->event_lists[type].n_total_by_occupation );
+    free( model->event_lists[type].n_daily_by_occupation );
 	free( model->event_lists[type].events );
 };
 
@@ -546,6 +557,7 @@ event* add_individual_to_event_list(
 		list->events[time ] = event;
 		list->n_daily[time]++;
 		list->n_daily_by_age[time][indiv->age_group]++;
+		list->n_daily_by_occupation[time][indiv->occupation_network]++;
 		list->n_daily_current[time]++;
 	}
 
@@ -554,6 +566,7 @@ event* add_individual_to_event_list(
 		list->n_total++;
 		list->n_current++;
 		list->n_total_by_age[indiv->age_group]++;
+        list->n_total_by_occupation[indiv->occupation_network]++;
 	}
 
 	return event;
@@ -618,6 +631,9 @@ void update_event_list_counters( model *model, int type )
 
 	for( int age = 0; age < N_AGE_GROUPS; age++ )
 		model->event_lists[type].n_total_by_age[age] += model->event_lists[type].n_daily_by_age[ model->time ][ age ];
+
+    for( int network = 0; network < model->n_occupation_networks; network++ )
+        model->event_lists[type].n_total_by_occupation[network] += model->event_lists[type].n_daily_by_occupation[model->time][network];
 }
 
 /*****************************************************************************************

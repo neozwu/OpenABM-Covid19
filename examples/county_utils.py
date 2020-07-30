@@ -94,26 +94,26 @@ HIGH_IMPACT_LOCKDOWN_SECTORS = [
 ]
 
 # adjust mean_work_interactions based on:
-# https://www.doh.wa.gov/Portals/1/Documents/1600/coronavirus/covid_occupation_industry_summary_2020-06-12.pdf
+# https://www.doh.wa.gov/Portals/1/Documents/1600/coronavirus/OccupationIndustryReport.pdf
 WORK_INTERACTION_ADJUST_RATIO = {
-  '11':  0.06 / 0.03, # Agriculture, forestry, fishing and hunting
+  '11':  0.11 / 0.03, # Agriculture, forestry, fishing and hunting
   '21':  1.0, # Mining, quarrying, and oil and gas extraction
   '22':  0.01 / 0.01, # Utilities
   '23':  0.06 / 0.06,  # Construction
-  '31-33': 0.09 / 0.09, # Manufacturing
-  '42':  0.01 / 0.04, # Wholesale trade
-  '44-45':  0.08 / 0.12, # Retail trade
-  '48-49':  0.05 / 0.04, # Transportation and warehousing
+  '31-33': 0.12 / 0.09, # Manufacturing
+  '42':  0.02 / 0.04, # Wholesale trade
+  '44-45':  0.09 / 0.12, # Retail trade
+  '48-49':  0.04 / 0.04, # Transportation and warehousing
   '51':  0.01 / 0.04, # Information
   '52':  0.02 / 0.03, # Finance and insurance
   '53':  0.01 / 0.02, # Real estate and rental and leasing
-  '54':  0.03 / 0.06, #  Professional and technical services
+  '54':  0.02 / 0.06, #  Professional and technical services
   '55':  0.01 / 0.02, # Management of companies and enterprises
   '56':  0.04 / 0.05, # Administrative and waste services
   '61':  0.03 / 0.09, # Educational services
-  '62':  0.37 / 0.13, # Health care and social assistance
+  '62':  0.31 / 0.13, # Health care and social assistance
   '71':  0.01 / 0.02,  # Arts, entertainment, and recreation
-  '72':  0.07  / 0.09, # Accommodation and food services
+  '72':  0.06  / 0.09, # Accommodation and food services
   '81':  0.02 / 0.03, # Other services, except public administration
   '99':  1.0, # Unclassified
 }
